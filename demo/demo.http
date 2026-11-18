@@ -1,0 +1,82 @@
+### ─────────────────────────────────────────────────────────────────────
+### Cross-channel memory demo — click "Send Request" above each block
+### (needs the REST Client extension; start a demo console config first)
+### Customer Maya Patel = CUST-1001, Daniel Okafor = CUST-1002
+### ─────────────────────────────────────────────────────────────────────
+
+@baseUrl = http://localhost:8080
+
+### 0 · Health check — shows backend (vertex/local) and model
+GET {{baseUrl}}/healthz
+
+### What does memory know about Maya before we start?
+GET {{baseUrl}}/customers/CUST-1001/memories?q=travel
+
+### 1 · WEB CHAT (identified by Account ID) — Maya shares a trip
+POST {{baseUrl}}/channels/web-chat
+Content-Type: application/json
+
+{
+  "account_id": "ACC-77310042",
+  "message": "I'm flying to Lisbon on November 10, please remember that. Will my card work there?"
+}
+
+### 2 · VOICE (identified by caller number) — she never mentions Lisbon
+POST {{baseUrl}}/channels/voice
+Content-Type: application/json
+
+{
+  "caller_number": "+1 (212) 555-0142",
+  "transcript": "Hi, I'm calling about my trip."
+}
+
+### 3 · EMAIL (identified by sender address) — formal style, cites the dispute
+POST {{baseUrl}}/channels/email
+Content-Type: application/json
+
+{
+  "sender": "Maya Patel <maya.patel@example.com>",
+  "subject": "Hotel charge",
+  "body": "Any update on the hotel charge?"
+}
+
+### 4 · EMAIL — a new contact preference
+POST {{baseUrl}}/channels/email
+Content-Type: application/json
+
+{
+  "sender": "maya.patel@example.com",
+  "subject": "Calls",
+  "body": "Only call me after 6pm from now on."
+}
+
+### 5 · NEW CHAT SESSION — recall from long-term memory
+POST {{baseUrl}}/channels/web-chat
+Content-Type: application/json
+
+{
+  "account_id": "ACC-77310042",
+  "message": "What have I told you about travel and when to call me?"
+}
+
+### Memory after the conversation
+GET {{baseUrl}}/customers/CUST-1001/memories?q=travel%20call%20preference
+
+### 6 · ISOLATION — Daniel calls; nothing of Maya's should appear
+POST {{baseUrl}}/channels/voice
+Content-Type: application/json
+
+{
+  "caller_number": "+1 (646) 555-0177",
+  "transcript": "Where's my replacement card?"
+}
+
+### 7 · OPTIONAL — all three channels at once, one memory
+POST {{baseUrl}}/demo/concurrent
+Content-Type: application/json
+
+{
+  "web_chat": { "account_id": "ACC-77310042", "message": "Is my Lisbon trip noted?" },
+  "voice":    { "caller_number": "+12125550142", "transcript": "When will you call me back?" },
+  "email":    { "sender": "maya.patel@example.com", "body": "Please confirm my travel notice." }
+}

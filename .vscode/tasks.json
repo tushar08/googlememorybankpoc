@@ -1,0 +1,61 @@
+{
+  // Terminal > Run Task… (or Cmd+Shift+P → "Tasks: Run Task"). Numbered in demo-prep order.
+  "version": "2.0.0",
+  "options": {
+    "env": { "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}" }
+  },
+  "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+  "tasks": [
+    {
+      "label": "0 · Offline tests (21)",
+      "type": "shell",
+      "command": "BACKEND=local python -m pytest -q",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "1 · Verify GCP environment",
+      "type": "shell",
+      "command": "python scripts/verify_env.py",
+      "problemMatcher": []
+    },
+    {
+      "label": "2 · Ingest profiles into Memory Bank (--reset)",
+      "type": "shell",
+      "command": "python scripts/ingest_profiles.py --reset",
+      "problemMatcher": []
+    },
+    {
+      "label": "3 · Demo console — LIVE (port 8080)",
+      "type": "shell",
+      "command": "BACKEND=vertex uvicorn cx_memory.api:app --port 8080",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "^__never__$" },
+        "background": { "beginsPattern": "Started server process", "endsPattern": "Uvicorn running on" }
+      }
+    },
+    {
+      "label": "3 · Demo console — OFFLINE rehearsal (port 8080)",
+      "type": "shell",
+      "command": "FAKE_MODEL=1 BACKEND=local uvicorn cx_memory.api:app --port 8080",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "^__never__$" },
+        "background": { "beginsPattern": "Started server process", "endsPattern": "Uvicorn running on" }
+      }
+    },
+    {
+      "label": "4 · Storyline benchmark (7 metrics × 3 runs)",
+      "type": "shell",
+      "command": "python eval/run_storyline.py --runs 3",
+      "problemMatcher": []
+    },
+    {
+      "label": "5 · ADK rubric evals (all 3 agents)",
+      "type": "shell",
+      "command": "python eval/adk/build_evalsets.py && adk eval eval/adk/voice_agent eval/adk/voice_agent/voice.evalset.json --print_detailed_results && adk eval eval/adk/web_chat_agent eval/adk/web_chat_agent/web_chat.evalset.json && adk eval eval/adk/email_agent eval/adk/email_agent/email.evalset.json",
+      "problemMatcher": []
+    }
+  ]
+}

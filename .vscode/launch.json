@@ -1,0 +1,73 @@
+{
+  // Run and Debug panel (Cmd+Shift+D). Each server config opens the demo console in your browser when ready.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "▶ Demo console — OFFLINE rehearsal (no GCP)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["cx_memory.api:app", "--port", "8080"],
+      "envFile": "${workspaceFolder}/.env",
+      "env": { "BACKEND": "local", "FAKE_MODEL": "1" },
+      "justMyCode": true,
+      "console": "integratedTerminal",
+      "serverReadyAction": {
+        "pattern": "Uvicorn running on (https?://\\S+)",
+        "uriFormat": "%s",
+        "action": "openExternally"
+      }
+    },
+    {
+      "name": "▶ Demo console — LIVE (Vertex + Memory Bank)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["cx_memory.api:app", "--port", "8080"],
+      "envFile": "${workspaceFolder}/.env",
+      "env": { "BACKEND": "vertex" },
+      "justMyCode": true,
+      "console": "integratedTerminal",
+      "serverReadyAction": {
+        "pattern": "Uvicorn running on (https?://\\S+)",
+        "uriFormat": "%s",
+        "action": "openExternally"
+      }
+    },
+    {
+      "name": "Storyline benchmark (7 metrics × 3 runs)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/eval/run_storyline.py",
+      "args": ["--runs", "3"],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Verify GCP environment",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/verify_env.py",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Ingest source-system profiles (--reset)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/ingest_profiles.py",
+      "args": ["--reset"],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug offline tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-q", "tests"],
+      "env": { "BACKEND": "local" },
+      "console": "integratedTerminal"
+    }
+  ]
+}

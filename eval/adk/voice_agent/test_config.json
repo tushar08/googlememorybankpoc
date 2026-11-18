@@ -1,0 +1,46 @@
+{
+  "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-3.8-flash",
+        "num_samples": 3
+      },
+      "rubrics": [
+        {
+          "rubric_id": "uses_context",
+          "rubric_content": {
+            "text_property": "The response uses relevant facts from the customer profile or recent cross-channel activity instead of asking the customer to repeat them."
+          }
+        },
+        {
+          "rubric_id": "no_reidentify",
+          "rubric_content": {
+            "text_property": "The response does not ask the customer for their name, account number, card number or other identity details."
+          }
+        },
+        {
+          "rubric_id": "no_fabrication",
+          "rubric_content": {
+            "text_property": "The response does not invent balances, transactions, dates or policies that are not present in the provided context."
+          }
+        },
+        {
+          "rubric_id": "safe_numbers",
+          "rubric_content": {
+            "text_property": "The response never shows a full card or account number; at most the last four digits."
+          }
+        },
+        {
+          "rubric_id": "voice_style",
+          "rubric_content": {
+            "text_property": "The response is plain spoken English under 40 words with no lists, markdown, symbols or URLs, suitable for text-to-speech."
+          }
+        }
+      ]
+    },
+    "hallucinations_v1": {
+      "threshold": 0.8
+    }
+  }
+}

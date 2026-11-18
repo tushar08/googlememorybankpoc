@@ -1,0 +1,38 @@
+{
+  "name": "maya_cross_channel_storyline",
+  "description": "9-step benchmark: one customer moves web chat -> voice -> email -> back to chat; a second customer checks isolation; step 9 runs all channels concurrently.",
+  "steps": [
+    {"id": 1, "channel": "web_chat", "identifier": "ACC-7731-0042", "new_session": true,
+     "text": "Hi, I'm flying to Lisbon on November 10. Please remember that. Will my travel card work there?",
+     "expect_customer": "CUST-1001", "expect_tool": "save_customer_fact", "expect_any": ["Lisbon"]},
+    {"id": 2, "channel": "web_chat", "identifier": "ACC-7731-0042", "same_session_as": 1,
+     "text": "Also, what's happening with the hotel charge I disputed?",
+     "expect_customer": "CUST-1001", "expect_any": ["DSP-5521", "under review", "review"]},
+    {"id": 3, "channel": "voice", "identifier": "212-555-0142", "new_session": true,
+     "text": "Hi, I'm calling about my trip.",
+     "expect_customer": "CUST-1001", "expect_any": ["Lisbon"], "cross_channel": true},
+    {"id": 4, "channel": "voice", "identifier": "212-555-0142", "same_session_as": 3,
+     "text": "Can you send me the link to track the dispute?",
+     "expect_customer": "CUST-1001", "expect_any": ["dispute", "email", "text", "send"]},
+    {"id": 5, "channel": "email", "identifier": "Maya Patel <maya.patel@example.com>", "new_session": true,
+     "text": "Subject: Hotel dispute\n\nHi, any update on the hotel charge? I mentioned it on chat and on the phone.",
+     "expect_customer": "CUST-1001", "expect_any": ["DSP-5521", "review"], "cross_channel": true},
+    {"id": 6, "channel": "email", "identifier": "maya.patel@example.com", "same_session_as": 5,
+     "text": "Also please remember that I only want calls after 6pm Eastern from now on.",
+     "expect_customer": "CUST-1001", "expect_tool": "save_customer_fact", "expect_any": ["6"]},
+    {"id": 7, "channel": "web_chat", "identifier": "ACC-77310042", "new_session": true, "wait_for_memory_s": 20,
+     "text": "Quick check: what have I told you about my travel plans and when to call me?",
+     "expect_customer": "CUST-1001", "expect_all": ["Lisbon"], "expect_any": ["6", "six", "evening"], "long_term": true},
+    {"id": 8, "channel": "voice", "identifier": "(646) 555-0177", "new_session": true,
+     "text": "Where is my replacement card?",
+     "expect_customer": "CUST-1002", "expect_any": ["November 6", "6th", "Nov 6", "sixth", "Thursday", "Friday"],
+     "must_not_contain": ["Maya", "Lisbon", "DSP-5521"]},
+    {"id": 9, "concurrent": true, "expect_customer": "CUST-1001",
+     "requests": [
+       {"channel": "web_chat", "identifier": "ACC-77310042", "text": "Is my Lisbon trip noted on my account?"},
+       {"channel": "voice", "identifier": "+12125550142", "text": "Is my Lisbon trip noted on my account?"},
+       {"channel": "email", "identifier": "maya.patel@example.com", "text": "Is my Lisbon trip noted on my account?"}
+     ],
+     "expect_any": ["Lisbon"]}
+  ]
+}

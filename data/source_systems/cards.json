@@ -1,0 +1,32 @@
+{
+  "system": "Cards",
+  "cards": [
+    {
+      "customer_id": "CUST-1001",
+      "card_last4": "4417",
+      "product": "Premier Travel Card (synthetic)",
+      "status": "Active",
+      "open_dispute": {
+        "id": "DSP-5521",
+        "merchant": "Skyline Hotels",
+        "amount_usd": 412.8,
+        "opened": "2026-10-29",
+        "status": "Under review"
+      }
+    },
+    {
+      "customer_id": "CUST-1002",
+      "card_last4": "9032",
+      "product": "Cashback Card (synthetic)",
+      "status": "Locked",
+      "lock_reason": "Reported lost 2026-11-01",
+      "replacement": "Shipped 2026-11-02, arriving 2026-11-06"
+    },
+    {
+      "customer_id": "CUST-1003",
+      "card_last4": "2210",
+      "product": "Business Card (synthetic)",
+      "status": "Active"
+    }
+  ]
+}

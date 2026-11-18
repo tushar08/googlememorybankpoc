@@ -1,0 +1,54 @@
+{
+  "system": "CRM",
+  "customers": [
+    {
+      "customer_id": "CUST-1001",
+      "first_name": "Maya",
+      "last_name": "Patel",
+      "segment": "Private Client",
+      "since": "2014-03-02",
+      "account_ids": [
+        "ACC-77310042"
+      ],
+      "phones": [
+        "+1 (212) 555-0142"
+      ],
+      "emails": [
+        "maya.patel@example.com"
+      ]
+    },
+    {
+      "customer_id": "CUST-1002",
+      "first_name": "Daniel",
+      "last_name": "Okafor",
+      "segment": "Retail",
+      "since": "2019-08-21",
+      "account_ids": [
+        "ACC-55102988"
+      ],
+      "phones": [
+        "+1 (646) 555-0177"
+      ],
+      "emails": [
+        "d.okafor@example.net"
+      ]
+    },
+    {
+      "customer_id": "CUST-1003",
+      "first_name": "Lucia",
+      "last_name": "Romero",
+      "segment": "Small Business",
+      "since": "2021-01-11",
+      "account_ids": [
+        "ACC-90014533",
+        "ACC-90014534"
+      ],
+      "phones": [
+        "+1 (917) 555-0119"
+      ],
+      "emails": [
+        "lucia@romero-bakery.example.com"
+      ]
+    }
+  ]
+}

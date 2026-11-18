@@ -1,0 +1,26 @@
+{
+  "system": "Servicing",
+  "cases": [
+    {
+      "customer_id": "CUST-1001",
+      "case_id": "CASE-30018",
+      "topic": "Travel notice",
+      "status": "Closed",
+      "detail": "Travel notice set for Lisbon, Portugal 2026-11-10 to 2026-11-20"
+    },
+    {
+      "customer_id": "CUST-1002",
+      "case_id": "CASE-30042",
+      "topic": "Address change",
+      "status": "Pending verification",
+      "detail": "New address submitted online; awaiting ID verification"
+    },
+    {
+      "customer_id": "CUST-1003",
+      "case_id": "CASE-30051",
+      "topic": "Merchant services",
+      "status": "Open",
+      "detail": "Asked about POS terminal pricing for a second store"
+    }
+  ]
+}

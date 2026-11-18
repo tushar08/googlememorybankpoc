@@ -1,0 +1,83 @@
+{
+  "eval_set_id": "web_chat_evalset",
+  "name": "web_chat channel rubric eval",
+  "eval_cases": [
+    {
+      "evalId": "web_chat_1_CUST-1001",
+      "conversation": [
+        {
+          "invocationId": "inv-1",
+          "userContent": {
+            "parts": [
+              {
+                "text": "What's the status of my hotel dispute?"
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "text": "Your dispute DSP-5521 for the Skyline Hotels charge is under review."
+              }
+            ],
+            "role": "model"
+          },
+          "creationTimestamp": 0.0
+        }
+      ],
+      "sessionInput": {
+        "appName": "cx_unified",
+        "userId": "CUST-1001",
+        "state": {
+          "customer_id": "CUST-1001",
+          "first_name": "Maya",
+          "channel": "web_chat",
+          "customer_profile": "- Customer's name is Maya Patel; segment Private Client; customer since 2014-03-02. [source: CRM]\n- Holds a Checking account ending 0042 (Active). [source: CoreBanking]\n- Has Premier Travel Card (synthetic) ending 4417, status Active. [source: Cards]\n- Open card dispute DSP-5521 for $412.80 at Skyline Hotels, opened 2026-10-29, status Under review. [source: Cards]\n- Servicing case CASE-30018 (Travel notice) is Closed: Travel notice set for Lisbon, Portugal 2026-11-10 to 2026-11-20. [source: Servicing]\n- Prefers email contact, language English, contact window after 6pm ET. [source: Preferences]\n- Prefers no marketing calls. [source: Preferences]",
+          "live_context": "(no recent activity on any channel)"
+        }
+      },
+      "creationTimestamp": 0.0,
+      "finalSessionState": {}
+    },
+    {
+      "evalId": "web_chat_2_CUST-1003",
+      "conversation": [
+        {
+          "invocationId": "inv-2",
+          "userContent": {
+            "parts": [
+              {
+                "text": "Did anyone get back to me about terminal pricing for the new store?"
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "text": "Your merchant services case about POS pricing is still open; I'll make sure it's followed up."
+              }
+            ],
+            "role": "model"
+          },
+          "creationTimestamp": 0.0
+        }
+      ],
+      "sessionInput": {
+        "appName": "cx_unified",
+        "userId": "CUST-1003",
+        "state": {
+          "customer_id": "CUST-1003",
+          "first_name": "Lucia",
+          "channel": "web_chat",
+          "customer_profile": "- Customer's name is Lucia Romero; segment Small Business; customer since 2021-01-11. [source: CRM]\n- Holds a Business Checking account ending 4533 (Active). [source: CoreBanking]\n- Holds a Business Savings account ending 4534 (Active). [source: CoreBanking]\n- Has Business Card (synthetic) ending 2210, status Active. [source: Cards]\n- Servicing case CASE-30051 (Merchant services) is Open: Asked about POS terminal pricing for a second store. [source: Servicing]\n- Prefers web_chat contact, language Spanish or English, contact window before 7am ET (bakery hours). [source: Preferences]",
+          "live_context": "(no recent activity on any channel)"
+        }
+      },
+      "creationTimestamp": 0.0,
+      "finalSessionState": {}
+    }
+  ],
+  "creation_timestamp": 0.0
+}

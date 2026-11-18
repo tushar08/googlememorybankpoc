@@ -1,0 +1,83 @@
+{
+  "eval_set_id": "email_evalset",
+  "name": "email channel rubric eval",
+  "eval_cases": [
+    {
+      "evalId": "email_1_CUST-1001",
+      "conversation": [
+        {
+          "invocationId": "inv-1",
+          "userContent": {
+            "parts": [
+              {
+                "text": "Subject: Hotel charge\n\nAny update on the hotel charge?"
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "text": "Dear Maya,\n\nYour dispute DSP-5521 for $412.80 at Skyline Hotels is under review.\n\nCustomer Care"
+              }
+            ],
+            "role": "model"
+          },
+          "creationTimestamp": 0.0
+        }
+      ],
+      "sessionInput": {
+        "appName": "cx_unified",
+        "userId": "CUST-1001",
+        "state": {
+          "customer_id": "CUST-1001",
+          "first_name": "Maya",
+          "channel": "email",
+          "customer_profile": "- Customer's name is Maya Patel; segment Private Client; customer since 2014-03-02. [source: CRM]\n- Holds a Checking account ending 0042 (Active). [source: CoreBanking]\n- Has Premier Travel Card (synthetic) ending 4417, status Active. [source: Cards]\n- Open card dispute DSP-5521 for $412.80 at Skyline Hotels, opened 2026-10-29, status Under review. [source: Cards]\n- Servicing case CASE-30018 (Travel notice) is Closed: Travel notice set for Lisbon, Portugal 2026-11-10 to 2026-11-20. [source: Servicing]\n- Prefers email contact, language English, contact window after 6pm ET. [source: Preferences]\n- Prefers no marketing calls. [source: Preferences]",
+          "live_context": "- [web_chat, 120s ago] customer: 'I'm flying to Lisbon on November 10, please remember that' | agent: 'Noted, Maya!'"
+        }
+      },
+      "creationTimestamp": 0.0,
+      "finalSessionState": {}
+    },
+    {
+      "evalId": "email_2_CUST-1002",
+      "conversation": [
+        {
+          "invocationId": "inv-2",
+          "userContent": {
+            "parts": [
+              {
+                "text": "Subject: Address\n\nDid my address change go through?"
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "text": "Dear Daniel,\n\nYour address change is pending ID verification.\n\nCustomer Care"
+              }
+            ],
+            "role": "model"
+          },
+          "creationTimestamp": 0.0
+        }
+      ],
+      "sessionInput": {
+        "appName": "cx_unified",
+        "userId": "CUST-1002",
+        "state": {
+          "customer_id": "CUST-1002",
+          "first_name": "Daniel",
+          "channel": "email",
+          "customer_profile": "- Customer's name is Daniel Okafor; segment Retail; customer since 2019-08-21. [source: CRM]\n- Holds a Checking account ending 2988 (Active). [source: CoreBanking]\n- Has Cashback Card (synthetic) ending 9032, status Locked (Reported lost 2026-11-01); replacement card Shipped 2026-11-02, arriving 2026-11-06. [source: Cards]\n- Servicing case CASE-30042 (Address change) is Pending verification: New address submitted online; awaiting ID verification. [source: Servicing]\n- Prefers voice contact, language English, contact window weekdays 9am-12pm ET. [source: Preferences]\n- Hard of hearing: speak slowly and confirm key numbers. [source: Preferences]",
+          "live_context": "(no recent activity on any channel)"
+        }
+      },
+      "creationTimestamp": 0.0,
+      "finalSessionState": {}
+    }
+  ],
+  "creation_timestamp": 0.0
+}

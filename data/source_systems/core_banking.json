@@ -1,0 +1,29 @@
+{
+  "system": "CoreBanking",
+  "accounts": [
+    {
+      "customer_id": "CUST-1001",
+      "account_id": "ACC-77310042",
+      "type": "Checking",
+      "status": "Active"
+    },
+    {
+      "customer_id": "CUST-1002",
+      "account_id": "ACC-55102988",
+      "type": "Checking",
+      "status": "Active"
+    },
+    {
+      "customer_id": "CUST-1003",
+      "account_id": "ACC-90014533",
+      "type": "Business Checking",
+      "status": "Active"
+    },
+    {
+      "customer_id": "CUST-1003",
+      "account_id": "ACC-90014534",
+      "type": "Business Savings",
+      "status": "Active"
+    }
+  ]
+}

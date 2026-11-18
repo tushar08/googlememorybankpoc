@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cross-channel memory PoC</title>
+<style>
+  :root { --ink:#1b1f2a; --muted:#6b7280; --line:#e5e7eb; --chat:#4f46e5; --voice:#0f766e; --email:#b45309; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; color:var(--ink); background:#f7f7f9; }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); background:#fff; display:flex; gap:16px; align-items:center; }
+  header h1 { font-size:16px; margin:0; }
+  header select { padding:4px 8px; }
+  main { display:grid; grid-template-columns: repeat(3, 1fr) 1.1fr; gap:12px; padding:12px; height:calc(100vh - 56px); }
+  .pane { background:#fff; border:1px solid var(--line); border-radius:10px; display:flex; flex-direction:column; min-height:0; }
+  .pane h2 { margin:0; padding:10px 12px; font-size:13px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; }
+  .pane h2 small { color:var(--muted); font-weight:400; }
+  .log { flex:1; overflow:auto; padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+  .msg { padding:8px 10px; border-radius:8px; white-space:pre-wrap; max-width:92%; }
+  .u { align-self:flex-end; background:#eef2ff; }
+  .a { align-self:flex-start; background:#f3f4f6; }
+  .meta { font-size:11px; color:var(--muted); }
+  .warn { color:#b91c1c; }
+  form { display:flex; gap:6px; padding:10px; border-top:1px solid var(--line); }
+  form input { flex:1; padding:7px 9px; border:1px solid var(--line); border-radius:6px; }
+  form button { padding:7px 12px; border:0; border-radius:6px; color:#fff; cursor:pointer; }
+  #web_chat h2 { color:var(--chat); } #web_chat button { background:var(--chat); }
+  #voice h2 { color:var(--voice); } #voice button { background:var(--voice); }
+  #email h2 { color:var(--email); } #email button { background:var(--email); }
+  #mem ul { margin:0; padding:10px 12px 10px 28px; overflow:auto; flex:1; }
+  #mem li { margin-bottom:6px; }
+  #mem form button { background:#374151; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cross-channel customer memory — PoC (synthetic data)</h1>
+  <label>Customer
+    <select id="cust">
+      <option value="1001">Maya Patel (CUST-1001)</option>
+      <option value="1002">Daniel Okafor (CUST-1002)</option>
+      <option value="1003">Lucia Romero (CUST-1003)</option>
+    </select>
+  </label>
+</header>
+<main>
+  <section class="pane" id="web_chat"><h2>Web chat <small id="id_web_chat"></small></h2><div class="log"></div>
+    <form><input placeholder="Type a chat message"><button>Send</button></form></section>
+  <section class="pane" id="voice"><h2>Voice (STT transcript) <small id="id_voice"></small></h2><div class="log"></div>
+    <form><input placeholder="What the caller says"><button>Speak</button></form></section>
+  <section class="pane" id="email"><h2>Email <small id="id_email"></small></h2><div class="log"></div>
+    <form><input placeholder="Email body"><button>Send</button></form></section>
+  <section class="pane" id="mem"><h2>Memory Bank <small>search</small></h2><ul></ul>
+    <form><input value="Lisbon dispute contact preference"><button>Search</button></form></section>
+</main>
+<script>
+const IDS = {
+  "1001": {web_chat:"ACC-77310042", voice:"+1 (212) 555-0142", email:"maya.patel@example.com"},
+  "1002": {web_chat:"ACC-55102988", voice:"+1 (646) 555-0177", email:"d.okafor@example.net"},
+  "1003": {web_chat:"ACC-90014533", voice:"+1 (917) 555-0119", email:"lucia@romero-bakery.example.com"},
+};
+const sessions = {};
+const $ = (s, r=document) => r.querySelector(s);
+function cust() { return $("#cust").value; }
+function refreshIds() { for (const ch of ["web_chat","voice","email"]) $("#id_"+ch).textContent = IDS[cust()][ch]; }
+function add(ch, cls, text, meta) {
+  const log = $("#"+ch+" .log"); const d = document.createElement("div");
+  d.className = "msg " + cls; d.textContent = text;
+  if (meta) { const m = document.createElement("div"); m.className = "meta" + (meta.warn ? " warn" : ""); m.textContent = meta.text; d.appendChild(m); }
+  log.appendChild(d); log.scrollTop = log.scrollHeight;
+}
+const ROUTES = {
+  web_chat: t => ["/channels/web-chat", {account_id: IDS[cust()].web_chat, message: t}],
+  voice:    t => ["/channels/voice",    {caller_number: IDS[cust()].voice, transcript: t}],
+  email:    t => ["/channels/email",    {sender: IDS[cust()].email, subject: "", body: t}],
+};
+for (const ch of Object.keys(ROUTES)) {
+  $("#"+ch+" form").addEventListener("submit", async e => {
+    e.preventDefault(); const inp = $("#"+ch+" input"); const t = inp.value.trim(); if (!t) return;
+    inp.value = ""; add(ch, "u", t);
+    const [url, body] = ROUTES[ch](t); body.session_id = sessions[cust()+ch] || null;
+    const t0 = performance.now();
+    try {
+      const r = await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+      const raw = await r.text(); let j;
+      try { j = JSON.parse(raw); } catch { j = {detail: raw}; }
+      if (!r.ok) { add(ch, "a", j.detail || r.statusText, {text:`server error ${r.status} · see the VS Code terminal for the traceback`, warn:true}); return; }
+      sessions[cust()+ch] = j.session_id;
+      const ms = Math.round(performance.now() - t0);
+      const tools = j.tool_calls.length ? " · tools: " + j.tool_calls.join(", ") : "";
+      const v = j.style_violations.length ? " · style: " + j.style_violations.join("; ") : "";
+      add(ch, "a", j.text, {text: `${j.agent} · ${j.customer_id} · ${ms} ms${tools}${v}`, warn: !!v});
+      searchMem();
+    } catch (err) { add(ch, "a", String(err), {text:"network error", warn:true}); }
+  });
+}
+async function searchMem(e) {
+  if (e) e.preventDefault();
+  const q = $("#mem input").value || "customer";
+  const r = await fetch(`/customers/CUST-${cust()}/memories?q=${encodeURIComponent(q)}`);
+  const ul = $("#mem ul"); ul.innerHTML = "";
+  if (!r.ok) { const li = document.createElement("li"); li.textContent = `Memory search failed (server error ${r.status})`; ul.appendChild(li); return; }
+  const j = await r.json();
+  for (const m of j.memories) { const li = document.createElement("li"); li.textContent = m; ul.appendChild(li); }
+}
+$("#mem form").addEventListener("submit", searchMem);
+$("#cust").addEventListener("change", () => { refreshIds(); document.querySelectorAll(".log").forEach(l => l.innerHTML = ""); searchMem(); });
+refreshIds(); searchMem();
+</script>
+</body>
+</html>

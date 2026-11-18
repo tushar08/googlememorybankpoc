@@ -1,0 +1,25 @@
+{
+  "system": "Preferences",
+  "preferences": [
+    {
+      "customer_id": "CUST-1001",
+      "preferred_channel": "email",
+      "language": "English",
+      "contact_window": "after 6pm ET",
+      "notes": "Prefers no marketing calls"
+    },
+    {
+      "customer_id": "CUST-1002",
+      "preferred_channel": "voice",
+      "language": "English",
+      "contact_window": "weekdays 9am-12pm ET",
+      "accessibility": "Hard of hearing: speak slowly and confirm key numbers"
+    },
+    {
+      "customer_id": "CUST-1003",
+      "preferred_channel": "web_chat",
+      "language": "Spanish or English",
+      "contact_window": "before 7am ET (bakery hours)"
+    }
+  ]
+}
