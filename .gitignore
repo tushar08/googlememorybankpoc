@@ -19,3 +19,7 @@ eval/results/
 
 # OS
 .DS_Store
+
+# Personal notes and editor setup: local only
+private/
+.vscode/

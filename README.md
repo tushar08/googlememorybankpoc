@@ -21,28 +21,28 @@ Three ADK `LlmAgent`s share one memory scope (`app_name=cx_unified`, `user_id=cu
 Why two tiers? Memory Bank extraction is asynchronous, so a fact can take seconds to show up.
 Tier 1 makes a chat turn visible to a voice call straight away. Tier 2 holds durable facts that are consolidated and deduplicated.
 
-## Repository map → plan checklist
+## Repository map
 
-| Plan item | Where |
+| Component | Where |
 |---|---|
-| **P1** Verify GCP project, APIs, model, Memory Bank & Sessions in us-central1 | `scripts/verify_env.py`, `scripts/setup_memory_bank.py` |
-| **P2** Three ADK LlmAgent channel agents | `cx_memory/agents.py` |
-| **P2** Deterministic routing by inbound channel | `cx_memory/gateway.py` (`route`) |
-| **P2** `preload_memory` similarity search before model calls | `cx_memory/tools.py` (ADK `PreloadMemoryTool`) |
-| **P2** `save_customer_fact` for consolidated facts | `cx_memory/tools.py` |
-| **P2** `after_agent_callback` sync to Memory Bank | `cx_memory/callbacks.py` |
-| **P3** Identity mapping: Account ID / caller number / sender address | `cx_memory/identity.py` |
-| **P3** Synthetic profiles from 5 source systems into both tiers | `data/source_systems/*.json`, `cx_memory/profiles.py`, `scripts/ingest_profiles.py` |
-| **P4** 21 offline tests across all 3 channels | `tests/test_offline.py` |
-| **P4** 9-step storyline benchmark, 7 metrics | `eval/storyline.json`, `eval/metrics.py`, `eval/run_storyline.py` |
-| **P4** Rule-based memory checks and ADK rubric judge | `eval/metrics.py`, `eval/adk/` |
-| R3 OmnichannelGateway and FastAPI channel endpoints | `cx_memory/gateway.py`, `cx_memory/api.py` |
+| Verify GCP project, APIs, model, Memory Bank & Sessions in us-central1 | `scripts/verify_env.py`, `scripts/setup_memory_bank.py` |
+| Three ADK LlmAgent channel agents | `cx_memory/agents.py` |
+| Deterministic routing by inbound channel | `cx_memory/gateway.py` (`route`) |
+| `preload_memory` similarity search before model calls | `cx_memory/tools.py` (ADK `PreloadMemoryTool`) |
+| `save_customer_fact` for consolidated facts | `cx_memory/tools.py` |
+| `after_agent_callback` sync to Memory Bank | `cx_memory/callbacks.py` |
+| Identity mapping: Account ID / caller number / sender address | `cx_memory/identity.py` |
+| Synthetic profiles from 5 source systems into both tiers | `data/source_systems/*.json`, `cx_memory/profiles.py`, `scripts/ingest_profiles.py` |
+| 21 offline tests across all 3 channels | `tests/test_offline.py` |
+| 9-step storyline benchmark, 7 metrics | `eval/storyline.json`, `eval/metrics.py`, `eval/run_storyline.py` |
+| Rule-based memory checks and ADK rubric judge | `eval/metrics.py`, `eval/adk/` |
+| OmnichannelGateway and FastAPI channel endpoints | `cx_memory/gateway.py`, `cx_memory/api.py` |
 | 8 Memory Bank topics (4 managed, 4 custom) | `cx_memory/memory_topics.py` |
 
 ## Quick start
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate   # Python 3.10+
 pip install -r requirements.txt
 
 # 0. Offline: no GCP needed
@@ -62,7 +62,7 @@ python scripts/ingest_profiles.py --reset
 # 3. Run the live demo console
 uvicorn cx_memory.api:app --port 8080        # http://localhost:8080
 
-# 4. Evidence for the slides
+# 4. Evaluation
 python eval/run_storyline.py --runs 3        # 7 metrics x 3 runs -> eval/results/*.json
 python eval/adk/build_evalsets.py
 adk eval eval/adk/voice_agent    eval/adk/voice_agent/voice.evalset.json --print_detailed_results
@@ -82,19 +82,10 @@ IAM: your user, or the Cloud Run service account, needs `roles/aiplatform.user`.
 6. **Switch to Daniel (CUST-1002), voice:** "Where's my replacement card?" Nothing of Maya's leaks through.
 7. Optional: `POST /demo/concurrent` serves all three channels at once from one memory.
 
-## Plan to the demo
-
-| Day | Work | Exit criterion |
-|---|---|---|
-| Fri 6 Nov | `.env`, `setup_memory_bank.py`, `verify_env.py`; confirm the exact Gemini model ID | All checks PASS |
-| Mon 9 Nov | `ingest_profiles.py`; live chat → voice → email by hand in the console; tune prompts | Steps 1–6 of the demo work live |
-| Tue 10 Nov | `run_storyline.py --runs 3`; fix failing metrics; tune `wait_for_memory_s` in step 7 | Every metric at or above target on 3 runs |
-| Wed 11 Nov | ADK rubric evals for the 3 agents; screenshots and JSON results into the deck; update the checklist | Evidence linked from the traceability matrix |
-| Thu 12 Nov | Dry run; record a backup video of the demo | Demo ready |
 
 ## Known risks and the decisions behind them
 
-- **Model ID.** `MODEL` defaults to `gemini-3.8-flash` because that's what the plan names. `verify_env.py` fails clearly if the ID is wrong.
+- **Model ID.** `MODEL` defaults to `gemini-3.8-flash`. `verify_env.py` fails clearly if the ID is wrong.
 - **Memory Bank latency.** Generated memories show up after seconds, not instantly. Tier 1 covers the immediate handoff. Step 7 of the storyline waits (`wait_for_memory_s`) before testing long-term recall.
 - **Tier 1 is in-process.** It's fine for a single gateway instance. Before scaling out, swap `LiveContextStore` for Memorystore or Firestore. The interface is the same.
 - **Identity is deterministic** (exact match after normalizing). There's no fuzzy matching, which keeps results reproducible. The resolver raises an error if one identifier maps to two customers.
