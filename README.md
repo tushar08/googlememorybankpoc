@@ -72,16 +72,39 @@ adk eval eval/adk/email_agent    eval/adk/email_agent/email.evalset.json
 
 IAM: your user, or the Cloud Run service account, needs `roles/aiplatform.user`.
 
-## Demo script (about 6 minutes, customer Maya / CUST-1001)
+## Demo walkthrough (live run on Gemini + Memory Bank, customer Maya / CUST-1001)
 
-1. **Chat:** "I'm flying to Lisbon on November 10, please remember that. Will my card work there?" The pill shows `tools: save_customer_fact`, and the Memory Bank panel shows the new fact.
-2. **Voice:** "Hi, I'm calling about my trip." The agent brings up Lisbon without being told, in under 40 words with no lists. This is the cross-channel moment.
-3. **Email:** "Any update on the hotel charge?" The reply opens "Dear Maya," cites DSP-5521 and is signed "Customer Care."
-4. **Email:** "Only call me after 6pm from now on." The preference is saved.
-5. **New chat session:** "What have I told you about travel and when to call me?" Both answers come from long-term memory.
-6. **Switch to Daniel (CUST-1002), voice:** "Where's my replacement card?" Nothing of Maya's leaks through.
-7. Optional: `POST /demo/concurrent` serves all three channels at once from one memory.
+Screenshots from a live run. Each panel is one channel, identified by its own identifier (Account ID, caller number, email address); the right-hand panel searches Memory Bank.
 
+**0. Starting point:** Maya's profile, loaded from five synthetic source systems, is already in Memory Bank.
+
+![Start: Maya's profile in Memory Bank](docs/screenshots/01-start-maya-profile.png)
+
+**1. Web chat:** "I'm flying to Lisbon on November 10, 2026, please remember that. Will my card work there?" The agent answers from the cards and servicing data and saves the trip with `save_customer_fact`.
+
+![Web chat saves the trip](docs/screenshots/02-web-chat-saves-trip.png)
+
+**2. Voice (the cross-channel moment):** "Hi, I'm calling about my trip." The voice agent knows it's about Lisbon without being told. The reply is short and conversational, suitable for speech.
+
+![Voice recalls the trip from chat](docs/screenshots/03-voice-recalls-trip.png)
+
+**3. Email:** "Any update on the hotel charge?" A formal email reply that opens "Dear Maya," cites dispute DSP-5521 and is signed "Customer Care".
+
+![Email gives a dispute update](docs/screenshots/04-email-dispute-update.png)
+
+**4. Email:** "Only call me after 6pm from now on." The new contact preference is saved to memory.
+
+![Email saves a contact preference](docs/screenshots/05-email-saves-preference.png)
+
+**5. New session, long-term recall:** a fresh chat with nothing on screen. "What have I told you about travel and when to call me?" Both answers come from Memory Bank.
+
+![New session recalls from long-term memory](docs/screenshots/06-new-session-long-term-recall.png)
+
+**6. Customer isolation:** Daniel (CUST-1002) calls about his replacement card. He gets his own details, and nothing of Maya's appears in his reply or his memory.
+
+![Daniel sees none of Maya's data](docs/screenshots/07-daniel-no-data-leak.png)
+
+Optional: `POST /demo/concurrent` serves all three channels at once from one memory.
 
 ## Known risks and the decisions behind them
 
