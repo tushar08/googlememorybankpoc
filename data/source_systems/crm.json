@@ -11,11 +11,13 @@
         "ACC-77310042"
       ],
       "phones": [
-        "+1 (212) 555-0142"
+        "+1 (212) 555-0142",
+        "+1 (212) 555-0100"
       ],
       "emails": [
         "maya.patel@example.com"
-      ]
+      ],
+      "household_id": "HH-501"
     },
     {
       "customer_id": "CUST-1002",
@@ -48,6 +50,24 @@
       ],
       "emails": [
         "lucia@romero-bakery.example.com"
+      ]
+    },
+    {
+      "customer_id": "CUST-1004",
+      "first_name": "Arjun",
+      "last_name": "Patel",
+      "segment": "Retail",
+      "since": "2016-06-14",
+      "household_id": "HH-501",
+      "account_ids": [
+        "ACC-77310077"
+      ],
+      "phones": [
+        "+1 (212) 555-0100",
+        "+1 (917) 555-0188"
+      ],
+      "emails": [
+        "arjun.patel@example.com"
       ]
     }
   ]

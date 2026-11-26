@@ -1,5 +1,8 @@
 """Phase 1: create the Agent Platform (Agent Engine) instance that hosts Sessions + Memory Bank
-with the 8 topics (4 managed, 4 custom) and a few-shot extraction example.
+with the 8 topics (4 managed, 4 custom), a few-shot extraction example and lifecycle TTLs.
+
+One instance per partition in production (consumer / business, per region). The PoC uses one instance
+and separates partitions by app_name in the memory scope.
 
 Usage:
     python scripts/setup_memory_bank.py            # create
@@ -21,12 +24,25 @@ from cx_memory.config import settings  # noqa: E402
 from cx_memory.memory_topics import generate_examples_config, memory_topics_config  # noqa: E402
 
 
+DAY_S = 86400
+
+
 def memory_bank_config() -> dict:
     cfg: dict = {
         "customization_configs": [{
             "memory_topics": memory_topics_config(),
             "generate_memories_examples": generate_examples_config(),
         }],
+        # Engine-wide backstop TTLs. Explicit facts written by the gateway carry their own per-topic
+        # `ttl` (see cx_memory/lifecycle.py); these cover memories Memory Bank generates by itself.
+        "ttl_config": {
+            "granular_ttl_config": {
+                "create_ttl": f"{365 * DAY_S}s",
+                "generate_created_ttl": f"{90 * DAY_S}s",
+                "generate_updated_ttl": f"{90 * DAY_S}s",
+            },
+            "memory_revision_default_ttl": f"{365 * DAY_S}s",
+        },
     }
     p, loc = settings.project_id, settings.memory_location
     if settings.memory_generation_model:

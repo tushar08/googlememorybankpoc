@@ -3,109 +3,615 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cross-channel memory PoC</title>
+<title>Customer Memory Console</title>
 <style>
-  :root { --ink:#1b1f2a; --muted:#6b7280; --line:#e5e7eb; --chat:#4f46e5; --voice:#0f766e; --email:#b45309; }
-  * { box-sizing: border-box; }
-  body { margin:0; font:14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; color:var(--ink); background:#f7f7f9; }
-  header { padding:14px 20px; border-bottom:1px solid var(--line); background:#fff; display:flex; gap:16px; align-items:center; }
-  header h1 { font-size:16px; margin:0; }
-  header select { padding:4px 8px; }
-  main { display:grid; grid-template-columns: repeat(3, 1fr) 1.1fr; gap:12px; padding:12px; height:calc(100vh - 56px); }
-  .pane { background:#fff; border:1px solid var(--line); border-radius:10px; display:flex; flex-direction:column; min-height:0; }
-  .pane h2 { margin:0; padding:10px 12px; font-size:13px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; }
-  .pane h2 small { color:var(--muted); font-weight:400; }
-  .log { flex:1; overflow:auto; padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
-  .msg { padding:8px 10px; border-radius:8px; white-space:pre-wrap; max-width:92%; }
+  :root {
+    --ink:#18202f; --muted:#667085; --line:#e4e7ec; --bg:#f4f5f8; --card:#fff; --soft:#f8f9fb;
+    --chat:#4f46e5; --voice:#0f766e; --email:#b45309; --crm:#7c3aed;
+    --ok:#067647; --okbg:#ecfdf3; --warn:#b54708; --warnbg:#fffaeb; --bad:#b42318; --badbg:#fef3f2; --info:#175cd3; --infobg:#eff8ff;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:13px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg); }
+  header { display:flex; align-items:center; gap:14px; padding:10px 16px; background:var(--card); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header h1 { font-size:15px; margin:0; }
+  header .sub { color:var(--muted); font-size:12px; }
+  header .sp { flex:1; }
+  select, input, textarea, button { font:inherit; }
+  select, input, textarea { padding:5px 8px; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink); }
+  button { padding:6px 11px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; color:var(--ink); }
+  button.primary { background:var(--ink); color:#fff; border-color:var(--ink); }
+  button:disabled { opacity:.5; cursor:default; }
+  .badge { display:inline-block; padding:1px 7px; border-radius:999px; font-size:11px; font-weight:600; background:var(--soft); border:1px solid var(--line); white-space:nowrap; }
+  .b-ok { background:var(--okbg); color:var(--ok); border-color:#abefc6; }
+  .b-warn { background:var(--warnbg); color:var(--warn); border-color:#fedf89; }
+  .b-bad { background:var(--badbg); color:var(--bad); border-color:#fecdca; }
+  .b-info { background:var(--infobg); color:var(--info); border-color:#b2ddff; }
+  .layout { display:grid; grid-template-columns: 270px minmax(0,1fr) 420px; gap:10px; padding:10px; height:calc(100vh - 54px); }
+  .col { display:flex; flex-direction:column; gap:10px; min-height:0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; display:flex; flex-direction:column; min-height:0; }
+  .card > h2 { margin:0; padding:8px 12px; font-size:12.5px; border-bottom:1px solid var(--line); display:flex; gap:8px; align-items:center; justify-content:space-between; }
+  .card > h2 small { color:var(--muted); font-weight:400; }
+  .scroll { overflow:auto; min-height:0; }
+  /* scenarios */
+  #scenarios { flex:1; }
+  .scn { padding:8px 12px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .scn:hover { background:var(--soft); }
+  .scn.active { background:var(--infobg); box-shadow: inset 3px 0 0 var(--info); }
+  .scn b { display:block; font-size:12.5px; }
+  .scn span { color:var(--muted); font-size:11.5px; }
+  .scn .num { color:var(--info); font-weight:700; margin-right:4px; }
+  /* story */
+  #story { max-height:30vh; flex:none; }
+  #story .body { padding:10px 12px; }
+  #story h3 { margin:0 0 4px; font-size:14px; }
+  .why { color:var(--muted); margin:0 0 8px; }
+  .kv { display:grid; grid-template-columns: 120px 1fr; gap:3px 10px; font-size:12px; margin-bottom:8px; }
+  .kv dt { color:var(--muted); }
+  .kv dd { margin:0; }
+  .steps { margin:0; padding:0; list-style:none; }
+  .steps li { padding:5px 8px; border-radius:6px; margin-bottom:3px; border:1px solid transparent; }
+  .steps li.run { border-color:#b2ddff; background:var(--infobg); }
+  .steps li.done { color:var(--muted); }
+  .steps li .res { display:block; color:var(--ink); font-size:12px; margin-top:2px; white-space:pre-wrap; }
+  .steps li.done .res { color:var(--ink); }
+  /* channels */
+  .channels { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:10px; flex:1; min-height:260px; }
+  .chan h2 { color:var(--c); }
+  .chan .id { padding:6px 10px; border-bottom:1px solid var(--line); display:flex; gap:6px; align-items:center; font-size:11.5px; color:var(--muted); }
+  .chan .id input { flex:1; font-size:11.5px; padding:3px 6px; }
+  .log { flex:1; overflow:auto; padding:8px 10px; display:flex; flex-direction:column; gap:7px; }
+  .msg { padding:7px 9px; border-radius:8px; white-space:pre-wrap; max-width:94%; }
   .u { align-self:flex-end; background:#eef2ff; }
-  .a { align-self:flex-start; background:#f3f4f6; }
-  .meta { font-size:11px; color:var(--muted); }
-  .warn { color:#b91c1c; }
-  form { display:flex; gap:6px; padding:10px; border-top:1px solid var(--line); }
-  form input { flex:1; padding:7px 9px; border:1px solid var(--line); border-radius:6px; }
-  form button { padding:7px 12px; border:0; border-radius:6px; color:#fff; cursor:pointer; }
-  #web_chat h2 { color:var(--chat); } #web_chat button { background:var(--chat); }
-  #voice h2 { color:var(--voice); } #voice button { background:var(--voice); }
-  #email h2 { color:var(--email); } #email button { background:var(--email); }
-  #mem ul { margin:0; padding:10px 12px 10px 28px; overflow:auto; flex:1; }
-  #mem li { margin-bottom:6px; }
-  #mem form button { background:#374151; }
+  .a { align-self:flex-start; background:var(--soft); border:1px solid var(--line); }
+  .a.guard { background:var(--warnbg); border-color:#fedf89; }
+  .meta { font-size:11px; color:var(--muted); margin-top:4px; display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+  .chan form { display:flex; gap:6px; padding:8px; border-top:1px solid var(--line); }
+  .chan form input { flex:1; }
+  .chan form button { background:var(--c); color:#fff; border-color:var(--c); }
+  #web_chat { --c:var(--chat); } #voice { --c:var(--voice); } #email { --c:var(--email); }
+  /* crm */
+  #crm { --c:var(--crm); max-height:30vh; flex:none; }
+  #crm h2 { color:var(--crm); }
+  #crm .body { padding:8px 12px; display:grid; grid-template-columns: 1fr 1fr; gap:6px 16px; }
+  #crm .full { grid-column: 1 / -1; }
+  .section-t { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:6px 0 3px; font-weight:600; }
+  ul.tight { margin:0; padding-left:16px; }
+  ul.tight li { margin-bottom:3px; }
+  .empty { color:var(--muted); padding:10px 12px; }
+  /* inspector */
+  .tabs { display:flex; gap:2px; padding:6px 8px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .tab { border:0; border-bottom:2px solid transparent; border-radius:0; padding:6px 8px; background:none; color:var(--muted); }
+  .tab.on { color:var(--ink); border-bottom-color:var(--ink); font-weight:600; }
+  #insp { flex:1; }
+  #insp .pane { padding:10px 12px; display:none; }
+  #insp .pane.on { display:block; }
+  .row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
+  .mem { border:1px solid var(--line); border-radius:8px; padding:6px 8px; margin-bottom:6px; background:#fff; }
+  .mem.SUPERSEDED, .mem.EXPIRED, .mem.ERASED, .mem.EVICTED { background:var(--soft); color:var(--muted); }
+  .mem .t { font-size:12px; }
+  .mem .m { font-size:11px; color:var(--muted); margin-top:3px; display:flex; flex-wrap:wrap; gap:4px 8px; }
+  table { border-collapse:collapse; width:100%; font-size:11.5px; }
+  th, td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  td.n, th.n { text-align:right; font-variant-numeric: tabular-nums; }
+  pre { margin:0; font-size:11px; white-space:pre-wrap; word-break:break-word; background:var(--soft); border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:6px; }
+  .grid2 label { font-size:11px; color:var(--muted); display:flex; flex-direction:column; gap:2px; }
+  .note { font-size:11px; color:var(--muted); }
+  @media (max-width: 1250px) { .layout { grid-template-columns: 230px minmax(0,1fr); height:auto; } .layout > .col:last-child { grid-column: 1 / -1; min-height:600px; } }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } .channels { grid-template-columns: 1fr; } .chan { min-height:300px; } }
 </style>
 </head>
 <body>
 <header>
-  <h1>Cross-channel customer memory — PoC (synthetic data)</h1>
+  <div><h1>Cross-channel customer memory: scenario console</h1><div class="sub">Synthetic data only · ADK agents + governed Memory Bank</div></div>
   <label>Customer
     <select id="cust">
-      <option value="1001">Maya Patel (CUST-1001)</option>
-      <option value="1002">Daniel Okafor (CUST-1002)</option>
-      <option value="1003">Lucia Romero (CUST-1003)</option>
+      <option value="CUST-1001">Maya Patel · Private Client</option>
+      <option value="CUST-1002">Daniel Okafor · Retail</option>
+      <option value="CUST-1003">Lucia Romero · Small Business</option>
+      <option value="CUST-1004">Arjun Patel · Retail (shares Maya's landline)</option>
     </select>
   </label>
+  <span class="sp"></span>
+  <span id="hdr-backend" class="badge">backend …</span>
+  <span id="hdr-breaker" class="badge">memory …</span>
+  <span id="hdr-clock" class="badge">clock +0d</span>
+  <button id="btn-reset-view">Clear panes</button>
 </header>
-<main>
-  <section class="pane" id="web_chat"><h2>Web chat <small id="id_web_chat"></small></h2><div class="log"></div>
-    <form><input placeholder="Type a chat message"><button>Send</button></form></section>
-  <section class="pane" id="voice"><h2>Voice (STT transcript) <small id="id_voice"></small></h2><div class="log"></div>
-    <form><input placeholder="What the caller says"><button>Speak</button></form></section>
-  <section class="pane" id="email"><h2>Email <small id="id_email"></small></h2><div class="log"></div>
-    <form><input placeholder="Email body"><button>Send</button></form></section>
-  <section class="pane" id="mem"><h2>Memory Bank <small>search</small></h2><ul></ul>
-    <form><input value="Lisbon dispute contact preference"><button>Search</button></form></section>
-</main>
+
+<div class="layout">
+  <!-- scenarios -->
+  <div class="col">
+    <section class="card" id="scenarios"><h2>Scenarios <small>click, then Run</small></h2><div class="scroll" id="scn-list"></div></section>
+  </div>
+
+  <!-- channels + story + crm -->
+  <div class="col">
+    <section class="card" id="story"><h2><span id="story-title">Pick a scenario</span><span><button class="primary" id="btn-run" disabled>Run scenario</button></span></h2>
+      <div class="scroll body" id="story-body"><p class="why">Each scenario drives the real API: the channels, the contact-center connector, SOR events and ops controls. The inspector on the right shows what happened inside the memory layer on every turn.</p></div>
+    </section>
+    <div class="channels">
+      <section class="card chan" id="web_chat"><h2>Web chat <small>authenticated session</small></h2>
+        <div class="id">Account <input data-k="web_chat"></div><div class="log"></div>
+        <form><input placeholder="Chat message"><button>Send</button></form></section>
+      <section class="card chan" id="voice"><h2>Voice <small>STT transcript</small></h2>
+        <div class="id">Caller <input data-k="voice"></div><div class="log"></div>
+        <form><input placeholder="What the caller says"><button>Speak</button></form></section>
+      <section class="card chan" id="email"><h2>Email <small>inbound</small></h2>
+        <div class="id">Sender <input data-k="email"></div><div class="log"></div>
+        <form><input placeholder="Email body"><button>Send</button></form></section>
+    </div>
+    <section class="card" id="crm"><h2>CRM agent desktop <small id="crm-sub">screen pop from the contact-center flow</small></h2>
+      <div class="scroll" id="crm-body"><div class="empty">No contact yet. Run scenario 4, or POST /connect/contact.</div></div></section>
+  </div>
+
+  <!-- inspector -->
+  <div class="col">
+    <section class="card" id="insp">
+      <div class="tabs" id="tabs"></div>
+      <div class="scroll" style="flex:1">
+        <div class="pane" data-pane="trace"><div id="trace"><div class="empty">Send a message on any channel to see its trace.</div></div></div>
+        <div class="pane" data-pane="ledger"><div id="ledger"></div></div>
+        <div class="pane" data-pane="ops"><div id="ops"></div></div>
+        <div class="pane" data-pane="cost"><div id="cost"></div></div>
+        <div class="pane" data-pane="audit"><div id="audit"></div></div>
+        <div class="pane" data-pane="events"><div id="events"></div></div>
+      </div>
+    </section>
+  </div>
+</div>
+
 <script>
-const IDS = {
-  "1001": {web_chat:"ACC-77310042", voice:"+1 (212) 555-0142", email:"maya.patel@example.com"},
-  "1002": {web_chat:"ACC-55102988", voice:"+1 (646) 555-0177", email:"d.okafor@example.net"},
-  "1003": {web_chat:"ACC-90014533", voice:"+1 (917) 555-0119", email:"lucia@romero-bakery.example.com"},
-};
-const sessions = {};
 const $ = (s, r=document) => r.querySelector(s);
-function cust() { return $("#cust").value; }
-function refreshIds() { for (const ch of ["web_chat","voice","email"]) $("#id_"+ch).textContent = IDS[cust()][ch]; }
-function add(ch, cls, text, meta) {
-  const log = $("#"+ch+" .log"); const d = document.createElement("div");
-  d.className = "msg " + cls; d.textContent = text;
-  if (meta) { const m = document.createElement("div"); m.className = "meta" + (meta.warn ? " warn" : ""); m.textContent = meta.text; d.appendChild(m); }
-  log.appendChild(d); log.scrollTop = log.scrollHeight;
+function el(tag, attrs={}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs||{})) {
+    if (v == null || v === false) continue;
+    if (k === "class") n.className = v; else if (k.startsWith("on")) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) n.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return n;
 }
-const ROUTES = {
-  web_chat: t => ["/channels/web-chat", {account_id: IDS[cust()].web_chat, message: t}],
-  voice:    t => ["/channels/voice",    {caller_number: IDS[cust()].voice, transcript: t}],
-  email:    t => ["/channels/email",    {sender: IDS[cust()].email, subject: "", body: t}],
+const badge = (t, kind) => el("span", {class:"badge" + (kind ? " b-"+kind : "")}, t);
+async function api(method, url, body) {
+  const r = await fetch(url, {method, headers: body ? {"Content-Type":"application/json"} : {}, body: body ? JSON.stringify(body) : undefined});
+  const txt = await r.text(); let j; try { j = JSON.parse(txt); } catch { j = {detail: txt}; }
+  if (!r.ok) throw new Error(j.detail || r.statusText);
+  return j;
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ------------------------------------------------------------------ customers & identifiers
+const IDS = {
+  "CUST-1001": {web_chat:"ACC-77310042", voice:"+1 (212) 555-0142", email:"maya.patel@example.com"},
+  "CUST-1002": {web_chat:"ACC-55102988", voice:"+1 (646) 555-0177", email:"d.okafor@example.net"},
+  "CUST-1003": {web_chat:"ACC-90014533", voice:"+1 (917) 555-0119", email:"lucia@romero-bakery.example.com"},
+  "CUST-1004": {web_chat:"ACC-77310077", voice:"+1 (917) 555-0188", email:"arjun.patel@example.com"},
 };
-for (const ch of Object.keys(ROUTES)) {
-  $("#"+ch+" form").addEventListener("submit", async e => {
-    e.preventDefault(); const inp = $("#"+ch+" input"); const t = inp.value.trim(); if (!t) return;
-    inp.value = ""; add(ch, "u", t);
-    const [url, body] = ROUTES[ch](t); body.session_id = sessions[cust()+ch] || null;
-    const t0 = performance.now();
-    try {
-      const r = await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
-      const raw = await r.text(); let j;
-      try { j = JSON.parse(raw); } catch { j = {detail: raw}; }
-      if (!r.ok) { add(ch, "a", j.detail || r.statusText, {text:`server error ${r.status} · see the VS Code terminal for the traceback`, warn:true}); return; }
-      sessions[cust()+ch] = j.session_id;
-      const ms = Math.round(performance.now() - t0);
-      const tools = j.tool_calls.length ? " · tools: " + j.tool_calls.join(", ") : "";
-      const v = j.style_violations.length ? " · style: " + j.style_violations.join("; ") : "";
-      add(ch, "a", j.text, {text: `${j.agent} · ${j.customer_id} · ${ms} ms${tools}${v}`, warn: !!v});
-      searchMem();
-    } catch (err) { add(ch, "a", String(err), {text:"network error", warn:true}); }
+const CH = ["web_chat","voice","email"];
+const sessions = {};  // channel|identifier -> session_id
+const cust = () => $("#cust").value;
+const ident = ch => $(`#${ch} .id input`).value.trim();
+function setIdentifiers(cid) { for (const ch of CH) $(`#${ch} .id input`).value = IDS[cid][ch]; }
+function setCustomer(cid) { $("#cust").value = cid; setIdentifiers(cid); refreshAll(); }
+
+// ------------------------------------------------------------------ channel turns
+const ROUTES = {
+  web_chat: (id, t, sid) => ["/channels/web-chat", {account_id:id, message:t, session_id:sid}],
+  voice:    (id, t, sid) => ["/channels/voice",    {caller_number:id, transcript:t, session_id:sid}],
+  email:    (id, t, sid) => ["/channels/email",    {sender:id, subject:"", body:t, session_id:sid}],
+};
+function bubble(ch, cls, text, metaKids) {
+  const d = el("div", {class:"msg " + cls}, text);
+  if (metaKids && metaKids.length) d.append(el("div", {class:"meta"}, metaKids));
+  const log = $(`#${ch} .log`); log.append(d); log.scrollTop = log.scrollHeight;
+}
+async function say(ch, text, opts={}) {
+  if (opts.identifier) $(`#${ch} .id input`).value = opts.identifier;
+  const id = ident(ch); const key = ch + "|" + id;
+  bubble(ch, "u", text);
+  const [url, body] = ROUTES[ch](id, text, opts.session_id || sessions[key] || null);
+  const t0 = performance.now();
+  try {
+    const j = await api("POST", url, body);
+    if (j.session_id) sessions[key] = j.session_id;
+    const ms = Math.round(performance.now() - t0);
+    const meta = [badge(j.assurance, {HIGH:"ok", MEDIUM:"info", NONE:"warn"}[j.assurance]), `${j.agent} · ${ms} ms`];
+    if (j.tool_calls?.length) meta.push(badge("tool: " + j.tool_calls.join(", ")));
+    const tr = j.trace || {};
+    if (tr.memories_used?.length) meta.push(badge(`${tr.memories_used.length} memories`, "info"));
+    for (const w of tr.writes || []) meta.push(badge(`write ${w.status}`, {saved:"ok", queued:"warn", rejected:"bad"}[w.status]));
+    if (tr.degraded?.length) meta.push(badge("degraded", "bad"));
+    if (j.style_violations?.length) meta.push(badge("style guard", "warn"));
+    bubble(ch, "a" + (j.step_up ? " guard" : ""), j.text, meta);
+    renderTrace(j, ch);
+    refreshAll();
+    return j;
+  } catch (e) { bubble(ch, "a guard", String(e.message || e), [badge("error", "bad")]); throw e; }
+}
+for (const ch of CH) {
+  $(`#${ch} form`).addEventListener("submit", e => {
+    e.preventDefault(); const inp = $(`#${ch} form input`); const t = inp.value.trim(); if (!t) return;
+    inp.value = ""; say(ch, t).catch(() => {});
   });
 }
-async function searchMem(e) {
-  if (e) e.preventDefault();
-  const q = $("#mem input").value || "customer";
-  const r = await fetch(`/customers/CUST-${cust()}/memories?q=${encodeURIComponent(q)}`);
-  const ul = $("#mem ul"); ul.innerHTML = "";
-  if (!r.ok) { const li = document.createElement("li"); li.textContent = `Memory search failed (server error ${r.status})`; ul.appendChild(li); return; }
-  const j = await r.json();
-  for (const m of j.memories) { const li = document.createElement("li"); li.textContent = m; ul.appendChild(li); }
+
+// ------------------------------------------------------------------ trace
+function memLine(m) {
+  return el("div", {class:"mem"}, el("div", {class:"t"}, m.text),
+    el("div", {class:"m"}, m.topic ? badge(m.topic) : badge("generated by Memory Bank"),
+      m.source ? `source ${m.source}` : null, m.version ? `v${m.version}` : null,
+      m.age_days != null ? `age ${m.age_days}d` : null, m.expires ? `expires ${m.expires}` : null));
 }
-$("#mem form").addEventListener("submit", searchMem);
-$("#cust").addEventListener("change", () => { refreshIds(); document.querySelectorAll(".log").forEach(l => l.innerHTML = ""); searchMem(); });
-refreshIds(); searchMem();
+function renderTrace(j, ch) {
+  const t = j.trace || {}; const box = $("#trace"); box.replaceChildren();
+  const id = t.identity || {};
+  box.append(el("div", {class:"section-t"}, `Last turn · ${ch}`));
+  box.append(el("dl", {class:"kv"},
+    el("dt", {}, "Identity"), el("dd", {}, `${id.status} via ${id.method} (${id.identifier})`),
+    el("dt", {}, "Assurance"), el("dd", {}, badge(j.assurance, {HIGH:"ok", MEDIUM:"info", NONE:"warn"}[j.assurance])),
+    el("dt", {}, "Memory scope"), el("dd", {}, t.customer_token ? `${t.app_name} / ${t.customer_token}` : "none (not verified)"),
+    el("dt", {}, "Partition"), el("dd", {}, t.partition || "-"),
+    el("dt", {}, "Taxonomy"), el("dd", {}, t.taxonomy_code || "-"),
+    el("dt", {}, "Event"), el("dd", {}, t.event_offset || "-"),
+  ));
+  if (id.notes?.length) box.append(el("ul", {class:"tight"}, id.notes.map(n => el("li", {}, n))));
+  if (j.step_up) box.append(el("p", {}, badge("step-up required", "warn"), " ", j.step_up.reason, ": no model call, no profile, no memory read."));
+  box.append(el("div", {class:"section-t"}, `Memories used (${(t.memories_used||[]).length})`));
+  if (!(t.memories_used||[]).length) box.append(el("div", {class:"note"}, "none"));
+  for (const m of t.memories_used || []) box.append(memLine(m));
+  box.append(el("div", {class:"section-t"}, "Memory writes"));
+  if (!(t.writes||[]).length) box.append(el("div", {class:"note"}, "none"));
+  for (const w of t.writes || []) box.append(el("div", {class:"mem"},
+    el("div", {class:"t"}, badge(w.status, {saved:"ok", queued:"warn", rejected:"bad"}[w.status]), " ", w.fact || w.reason || ""),
+    el("div", {class:"m"}, w.topic ? badge(w.topic) : null, w.memory_id || null, w.version > 1 ? `v${w.version}, supersedes ${w.supersedes}` : null,
+      w.expires_at ? `expires ${w.expires_at}` : null, w.redacted?.length ? `redacted: ${w.redacted.join(", ")}` : null,
+      w.needs_step_up ? badge("needs step-up", "warn") : null)));
+  box.append(el("div", {class:"section-t"}, "Extraction"), el("div", {}, (t.extraction||[]).join(" · ") || "-"));
+  if (t.degraded?.length) { box.append(el("div", {class:"section-t"}, "Degraded mode")); box.append(el("ul", {class:"tight"}, t.degraded.map(d => el("li", {}, badge("fallback", "bad"), " ", d)))); }
+  if (t.cost_delta) {
+    box.append(el("div", {class:"section-t"}, "Cost of this turn (illustrative rates)"));
+    const c = t.cost_delta; box.append(el("table", {}, el("tbody", {},
+      Object.entries(c).filter(([k]) => k !== "est_usd").map(([k,v]) => el("tr", {}, el("td", {}, k), el("td", {class:"n"}, v))),
+      el("tr", {}, el("th", {}, "estimated USD"), el("th", {class:"n"}, "$" + (c.est_usd||0).toFixed(6))))));
+  }
+  showTab("trace");
+}
+
+// ------------------------------------------------------------------ inspector tabs
+const TABS = [["trace","Turn trace"],["ledger","Memory ledger"],["ops","Resilience & ops"],["cost","Cost & quotas"],["audit","Audit"],["events","Events"]];
+for (const [k, label] of TABS) $("#tabs").append(el("button", {class:"tab", "data-t":k, onclick:() => showTab(k)}, label));
+function showTab(k) {
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.t === k));
+  document.querySelectorAll("#insp .pane").forEach(p => p.classList.toggle("on", p.dataset.pane === k));
+}
+showTab("trace");
+
+async function renderLedger() {
+  const j = await api("GET", `/customers/${cust()}/ledger`);
+  const box = $("#ledger"); box.replaceChildren();
+  box.append(el("dl", {class:"kv"},
+    el("dt", {}, "Customer"), el("dd", {}, cust()),
+    el("dt", {}, "Token (scope)"), el("dd", {}, j.customer_token),
+    el("dt", {}, "Partition"), el("dd", {}, j.partition),
+    el("dt", {}, "Consent"), el("dd", {}, j.consent ? badge("granted","ok") : badge("withdrawn","bad")),
+    el("dt", {}, "Legal hold"), el("dd", {}, j.legal_hold ? badge("ON","warn") : "off")));
+  const counts = {}; for (const r of j.records) counts[r.status] = (counts[r.status]||0) + 1;
+  box.append(el("div", {class:"row"}, Object.entries(counts).map(([s,n]) => badge(`${s} ${n}`, s === "ACTIVE" ? "ok" : null))));
+  box.append(el("div", {class:"row"},
+    el("button", {onclick: () => act(() => api("POST", `/customers/${cust()}/legal-hold`, {on: !j.legal_hold}))}, j.legal_hold ? "Release legal hold" : "Set legal hold"),
+    el("button", {onclick: () => act(() => api("POST", `/customers/${cust()}/consent`, {granted: !j.consent}))}, j.consent ? "Withdraw consent" : "Grant consent"),
+    el("button", {onclick: () => act(() => api("POST", `/customers/${cust()}/erase`))}, "Erase (right to erasure)"),
+    el("button", {onclick: async () => { const x = await api("GET", `/customers/${cust()}/export`); alert(`DSAR export: ${x.memories.length} memory records, ${x.audit.length} audit entries (detokenize was audited)`); refreshAll(); }}, "DSAR export")));
+  box.append(el("div", {class:"section-t"}, "Live context (Tier 1)"));
+  box.append(j.live_context.length ? el("ul", {class:"tight"}, j.live_context.map(t => el("li", {}, `[${t.channel}] ${t.customer ? "customer: " + t.customer + " → " : ""}${t.agent}`))) : el("div", {class:"note"}, "empty"));
+  box.append(el("div", {class:"section-t"}, "Memory records (newest first)"));
+  for (const r of [...j.records].reverse()) box.append(el("div", {class:"mem " + r.status},
+    el("div", {class:"t"}, r.text),
+    el("div", {class:"m"}, badge(r.status, r.status === "ACTIVE" ? "ok" : null), badge(r.topic), `v${r.version}`, `${r.source_kind}/${r.source_channel}`,
+      r.classification === "RESTRICTED" ? badge("RESTRICTED", "warn") : null, `created ${r.created_at}`, `expires ${r.expires_at}`,
+      r.superseded_by ? `superseded by ${r.superseded_by}` : null, el("span", {title:r.retention_basis}, "ⓘ " + r.retention_basis))));
+}
+
+async function renderOps() {
+  const s = await api("GET", "/ops/status");
+  $("#hdr-backend").textContent = `backend ${s.backend} · ${s.model}`;
+  const br = s.breaker.state; const hb = $("#hdr-breaker");
+  hb.textContent = `memory ${s.faults.memory_bank} · breaker ${br}`; hb.className = "badge " + (br === "closed" && s.faults.memory_bank === "ok" ? "b-ok" : "b-bad");
+  $("#hdr-clock").textContent = `clock +${s.clock_offset_days}d · ${s.now.slice(0,10)}`;
+  const box = $("#ops"); box.replaceChildren();
+  box.append(el("div", {class:"section-t"}, "Fault injection (Memory Bank)"));
+  box.append(el("div", {class:"row"}, ...["ok","slow","down","throttled"].map(m =>
+    el("button", {class: s.faults.memory_bank === m ? "primary" : "", onclick: () => act(() => api("POST", "/ops/faults", {memory_bank: m}))}, m))));
+  box.append(el("dl", {class:"kv"},
+    el("dt", {}, "Circuit breaker"), el("dd", {}, badge(br, br === "closed" ? "ok" : "bad"), ` failures ${s.breaker.failures}/${s.breaker.fail_threshold}, trips ${s.breaker.trips}, retry after ${s.breaker.reset_after_s}s`),
+    el("dt", {}, "Read budget"), el("dd", {}, `${s.read_timeout_ms} ms, then fall back to live context + SOR profile`),
+    el("dt", {}, "Outbox"), el("dd", {}, `${s.outbox.pending} pending · ${s.outbox.delivered} delivered · ${s.outbox.deduplicated} deduplicated · ${s.outbox.dead_lettered} dead-lettered`),
+    el("dt", {}, "Audit chain"), el("dd", {}, s.audit.ok ? badge(`intact · ${s.audit.entries} entries · head ${s.audit.head}`, "ok") : badge(`BROKEN at ${s.audit.broken_at}`, "bad"))));
+  box.append(el("div", {class:"row"}, el("button", {onclick: () => act(() => api("POST", "/ops/outbox/drain"))}, "Drain outbox now")));
+  if (s.outbox.items.length) box.append(el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "op"), el("th", {}, "item"), el("th", {class:"n"}, "tries"), el("th", {}, "last error"))),
+    el("tbody", {}, s.outbox.items.map(i => el("tr", {}, el("td", {}, i.op), el("td", {}, i.description), el("td", {class:"n"}, i.attempts), el("td", {}, i.last_error))))));
+  box.append(el("div", {class:"section-t"}, "Lifecycle clock"));
+  box.append(el("div", {class:"row"},
+    el("button", {onclick: () => act(() => api("POST", "/ops/clock/advance", {days: 15}))}, "+15 days"),
+    el("button", {onclick: () => act(() => api("POST", "/ops/clock/advance", {days: 45}))}, "+45 days"),
+    el("button", {onclick: () => act(() => api("POST", "/ops/clock/advance", {reset: true}))}, "Reset clock"),
+    el("button", {onclick: () => act(async () => { const x = await api("POST", "/ops/lifecycle/sweep"); alert(`Sweeper expired ${x.expired.length} memories`); })}, "Run expiry sweep")));
+  box.append(el("div", {class:"section-t"}, "Extraction policy"));
+  box.append(el("div", {class:"row"}, ...["per_turn","salient","batched"].map(m =>
+    el("button", {class: s.extraction_policy.mode === m ? "primary" : "", onclick: () => act(() => api("POST", "/ops/extraction-policy", {mode: m, batch_turns: 6}))}, m)),
+    el("span", {class:"note"}, `${s.extraction_policy.buffered_events} events buffered`)));
+}
+
+async function renderCost() {
+  const s = await api("GET", "/ops/status");
+  const box = $("#cost"); box.replaceChildren();
+  box.append(el("div", {class:"section-t"}, "Partitions & quotas (live token buckets)"));
+  for (const p of s.partitions) {
+    box.append(el("div", {class:"mem"}, el("div", {class:"t"}, el("b", {}, p.name), ` · ${p.app_name} · ${p.region} · segments: ${p.segments.join(", ")}`),
+      el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "op"), el("th", {class:"n"}, "QPM"), el("th", {class:"n"}, "burst"), el("th", {class:"n"}, "available"), el("th", {class:"n"}, "rejected"))),
+        el("tbody", {}, Object.entries(p.quotas).map(([k,q]) => el("tr", {}, el("td", {}, k), el("td", {class:"n"}, q.per_minute), el("td", {class:"n"}, q.burst), el("td", {class:"n"}, q.available), el("td", {class:"n"}, q.rejected))))),
+      el("div", {class:"m"}, `cap ${p.max_memories_per_customer} memories/customer · ${p.daily_writes_per_customer} writes/customer/day`)));
+  }
+  box.append(el("div", {class:"section-t"}, "Metered usage this session"));
+  const parts = s.meter.partitions; const keys = ["turns","model_calls","retrieve_calls","extraction_calls","extraction_skipped","explicit_writes","writes_blocked","throttled","degraded_reads","outboxed_writes"];
+  const names = Object.keys(parts);
+  if (!names.length) box.append(el("div", {class:"note"}, "no traffic yet"));
+  else box.append(el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "metric"), names.map(n => el("th", {class:"n"}, n)))),
+    el("tbody", {}, keys.map(k => el("tr", {}, el("td", {}, k), names.map(n => el("td", {class:"n"}, parts[n][k])))),
+      ["agent_model_usd","extraction_usd","memory_bank_fees_usd","total_usd","per_turn_usd"].map(k => el("tr", {}, el("th", {}, k), names.map(n => el("th", {class:"n"}, parts[n].cost[k] == null ? "-" : "$" + Number(parts[n].cost[k]).toFixed(5))))))));
+  box.append(el("div", {class:"note"}, s.meter.prices.note));
+
+  box.append(el("div", {class:"section-t"}, "Capacity plan (monthly, one partition)"));
+  const f = el("form", {class:"grid2"});
+  const fields = [["contacts_per_month",2000000],["turns_per_contact",4],["salient_share",0.45],["customers",1500000],["memories_per_customer",25],["peak_factor",3]];
+  for (const [k,v] of fields) f.append(el("label", {}, k, el("input", {name:k, value:v})));
+  f.append(el("label", {}, "mode", (() => { const sel = el("select", {name:"mode"}); for (const m of ["per_turn","salient","batched"]) sel.append(el("option", {value:m, selected: m === "salient"}, m)); return sel; })()));
+  f.append(el("label", {}, " ", el("button", {class:"primary"}, "Project")));
+  const out = el("div");
+  f.addEventListener("submit", async e => { e.preventDefault(); const q = new URLSearchParams(new FormData(f)); const c = await api("GET", "/ops/capacity?" + q); out.replaceChildren(capTable(c)); });
+  box.append(f, out);
+
+  box.append(el("div", {class:"section-t"}, "Burst test (memory layer, isolated store)"));
+  const bOut = el("div");
+  box.append(el("div", {class:"row"}, el("button", {onclick: async e => { e.target.disabled = true; try { bOut.replaceChildren(await burstCompare()); } finally { e.target.disabled = false; } }}, "Run 300 contacts × 3 policies")), bOut);
+}
+function capTable(c) {
+  const rows = [["extraction calls / month", c.monthly.extraction_calls.toLocaleString()], ["retrieve calls / month", c.monthly.retrieve_calls.toLocaleString()],
+    ["extraction input tokens", c.monthly.extraction_input_tokens.toLocaleString()], ["agent model $", c.cost_usd.agent_model_usd.toFixed(0)],
+    ["extraction $", c.cost_usd.extraction_usd.toFixed(0)], ["Memory Bank fees $", c.cost_usd.memory_bank_fees_usd.toFixed(0)], ["storage $", c.cost_usd.storage_usd.toFixed(0)],
+    ["total $ / month", c.cost_usd.total_with_storage_usd.toLocaleString()], ["$ per contact", c.cost_usd.per_contact_usd],
+    ["peak extract QPM vs quota", `${c.throughput.peak_extract_qpm} / ${c.throughput.extract_qpm_quota}`], ["peak read QPM vs quota", `${c.throughput.peak_read_qpm} / ${c.throughput.read_qpm_quota}`]];
+  return el("div", {}, el("table", {}, el("tbody", {}, rows.map(([k,v]) => el("tr", {}, el("td", {}, k), el("td", {class:"n"}, v))))),
+    c.throughput.needs_quota_increase ? el("p", {}, badge("needs a quota increase or another partition", "bad")) : el("p", {}, badge("fits the partition quota", "ok")),
+    el("div", {class:"note"}, c.note));
+}
+async function burstCompare() {
+  const rows = [];
+  for (const mode of ["per_turn","salient","batched"]) rows.push(await api("POST", "/ops/burst", {contacts:300, concurrency:60, turns_per_contact:3, mb_latency_ms:60, mode}));
+  return el("div", {}, el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "policy"), el("th", {class:"n"}, "turns/s"), el("th", {class:"n"}, "p95 ms"), el("th", {class:"n"}, "extractions"), el("th", {class:"n"}, "skipped"), el("th", {class:"n"}, "throttled"), el("th", {class:"n"}, "$ total"))),
+    el("tbody", {}, rows.map(r => el("tr", {}, el("td", {}, r.inputs.extraction_mode), el("td", {class:"n"}, r.throughput.turns_per_s), el("td", {class:"n"}, r.throughput.p95_ms),
+      el("td", {class:"n"}, r.memory_ops.extraction_calls), el("td", {class:"n"}, r.memory_ops.extraction_skipped), el("td", {class:"n"}, r.memory_ops.throttled), el("td", {class:"n"}, "$" + r.cost.total_usd.toFixed(4)))))),
+    el("div", {class:"note"}, "900 turns, 60 ms injected Memory Bank latency, consumer partition quotas. Throttled work goes to the outbox, it is not dropped."));
+}
+
+async function renderAudit() {
+  const j = await api("GET", `/ops/audit?customer_id=${cust()}&n=40`);
+  const all = await api("GET", "/ops/audit?n=8");
+  const box = $("#audit"); box.replaceChildren();
+  box.append(el("p", {}, j.verify.ok ? badge(`hash chain intact · ${j.verify.entries} entries`, "ok") : badge(`hash chain BROKEN at #${j.verify.broken_at}`, "bad")));
+  const tbl = rows => el("table", {}, el("thead", {}, el("tr", {}, el("th", {class:"n"}, "#"), el("th", {}, "action"), el("th", {}, "actor"), el("th", {}, "details"))),
+    el("tbody", {}, [...rows].reverse().map(e => el("tr", {}, el("td", {class:"n"}, e.seq), el("td", {}, e.action), el("td", {}, e.actor), el("td", {}, el("pre", {}, JSON.stringify(e.details)))))));
+  box.append(el("div", {class:"section-t"}, `This customer (${cust()}, by token)`), tbl(j.entries));
+  box.append(el("div", {class:"section-t"}, "Latest system-wide"), tbl(all.entries));
+}
+
+async function renderEvents() {
+  const j = await api("GET", "/ops/events?n=25");
+  const box = $("#events"); box.replaceChildren();
+  box.append(el("p", {class:"note"}, "Kafka stand-in. Partition key = customer token. Interaction events carry taxonomy + memory references, never raw conversation text."));
+  for (const e of [...j.events].reverse()) box.append(el("div", {class:"mem"},
+    el("div", {class:"m"}, badge(e.topic, "info"), `partition ${e.partition} · offset ${e.offset}`, e.published_at),
+    el("pre", {}, JSON.stringify(e.payload, null, 1))));
+}
+
+async function refreshAll() {
+  await Promise.allSettled([renderLedger(), renderOps(), renderCost(), renderAudit(), renderEvents()]);
+}
+async function act(fn) { try { await fn(); } catch (e) { alert(e.message || e); } await refreshAll(); }
+
+// ------------------------------------------------------------------ CRM desktop
+function renderScreenPop(out) {
+  const box = $("#crm-body"); box.replaceChildren();
+  const a = out.contact_attributes, p = out.screen_pop;
+  $("#crm-sub").textContent = `contact ${out.contact_id}`;
+  const attrs = el("div", {class:"full"}, el("div", {class:"section-t"}, "Contact attributes returned to the contact flow (no PII)"), el("pre", {}, JSON.stringify(a)));
+  if (!p) { box.append(el("div", {class:"body"}, attrs, el("div", {class:"full"}, badge("unverified", "warn"), " routed to identity verification"))); return; }
+  box.append(el("div", {class:"body"},
+    el("div", {}, el("div", {class:"section-t"}, "Customer"), el("div", {}, el("b", {}, p.customer), ` · ${p.segment} · since ${p.customer_since}`),
+      el("div", {class:"row"}, badge(a.route_queue, "info"), badge("priority " + a.priority), badge(p.identity.assurance, p.identity.assurance === "HIGH" ? "ok" : "info"))),
+    el("div", {}, el("div", {class:"section-t"}, "Open issues (from SOR)"), p.open_issues.length ? el("ul", {class:"tight"}, p.open_issues.map(i => el("li", {}, el("b", {}, i.ref), ` ${i.type}: ${i.status} · ${i.detail}`))) : el("div", {class:"note"}, "none")),
+    el("div", {class:"full"}, el("div", {class:"section-t"}, "Next best actions"), el("ul", {class:"tight"}, p.next_best_actions.map(n => el("li", {}, n)))),
+    el("div", {class:"full"}, el("div", {class:"section-t"}, "Memory highlights (with provenance)"), p.memory_highlights.map(memLine)),
+    p.recent_activity_other_channels.length ? el("div", {class:"full"}, el("div", {class:"section-t"}, "Recent activity on other channels"), el("ul", {class:"tight"}, p.recent_activity_other_channels.map(t => el("li", {}, `[${t.channel}] ${t.customer || ""} ${t.agent}`)))) : null,
+    attrs,
+    wrapUpForm(out.contact_id)));
+}
+function wrapUpForm(contactId) {
+  const notes = el("input", {value:"Customer asked for a paper copy of the dispute letter. Prefers email follow-up.", style:"flex:1"});
+  const disp = el("select", {}, ...["Resolved - info given","Follow-up required","Transferred"].map(d => el("option", {}, d)));
+  const f = el("form", {class:"row full"}, el("b", {}, "Wrap-up:"), disp, notes, el("button", {class:"primary"}, "Log to CRM"));
+  f.addEventListener("submit", async e => { e.preventDefault(); const r = await api("POST", `/connect/contact/${contactId}/wrap-up`, {disposition: disp.value, notes: notes.value, agent_id:"agent-007"});
+    f.replaceWith(el("div", {class:"full"}, badge("CRM activity " + r.crm_activity.activity_id, "ok"), ` ${r.crm_activity.taxonomy_code} · memory ${r.memory.status} (${r.memory.memory_id || r.memory.reason})`)); refreshAll(); });
+  return f;
+}
+async function connectContact(address, intent, channel="VOICE") {
+  const out = await api("POST", "/connect/contact", {ContactId: "ct-" + Math.random().toString(36).slice(2,8), Channel: channel, CustomerEndpoint: {Address: address, Type: "TELEPHONE_NUMBER"}, Attributes: {intent}});
+  renderScreenPop(out); refreshAll(); return out;
+}
+
+// ------------------------------------------------------------------ scenarios
+const SC = [
+  { title: "Cross-channel handoff", tag: "baseline: chat → voice → email",
+    why: "The customer never repeats themselves. Tier 1 (live context) makes the chat visible to the voice agent within the same second; Tier 2 (Memory Bank) holds the durable fact.",
+    legacy: "Today each channel writes its own interaction event; an agent on another channel can't see it in real time.",
+    prod: "Live context in Memorystore/Firestore; Memory Bank per partition.",
+    customer: "CUST-1001",
+    steps: [
+      ["Web chat: customer mentions a trip", () => say("web_chat", "Please remember that I fly to Lisbon on November 10, 2026 until November 20, 2026. Will my card work there?")],
+      ["Voice, seconds later: the agent already knows", () => say("voice", "Hi, I'm calling about my Lisbon trip")],
+      ["Email: dispute question, answered from SOR-backed memory", () => say("email", "Any update on the hotel dispute?")],
+    ]},
+  { title: "Customer calls from a different phone", tag: "unknown number → step-up → linked device",
+    why: "An unknown caller number gets no profile and no memory. The caller keys in an account number, receives a one-time passcode on the phone ON FILE (never the new phone), and the call continues at HIGH assurance. The new number is linked but flagged as a new device for 30 days, and contact changes over a spoofable channel are refused.",
+    legacy: "Agent asks security questions manually; the interaction history is not tied to the new number.",
+    prod: "Telephony passes ANI + carrier risk signals; OTP through the enterprise authentication service; linked-device registry in the identity platform.",
+    customer: "CUST-1001",
+    steps: [
+      ["Call from an unknown number", () => say("voice", "Hi, it's Maya, I'm calling about my hotel dispute", {identifier: "+1 (917) 555-0199"})],
+      ["Caller keys in the account number; passcode sent to the phone on file", async () => {
+        const s = await api("POST", "/identity/step-up/start", {channel:"voice", identifier:"+1 (917) 555-0199", account_number:"ACC-7731-0042"});
+        window._ch = s; return `${s.status}: ${s.delivered_to} · demo code ${s.demo_code}`; }],
+      ["Caller reads back the passcode → verified, number linked", async () => {
+        const v = await api("POST", "/identity/step-up/verify", {challenge_id: window._ch.challenge_id, code: window._ch.demo_code});
+        sessions["voice|+1 (917) 555-0199"] = v.session_id; refreshAll(); return `${v.status}, assurance ${v.assurance}, new number linked: ${v.new_identifier_linked}`; }],
+      ["Same call continues with full memory", () => say("voice", "So what's happening with my hotel dispute?")],
+      ["A week later, same new phone: recognised, flagged NEW DEVICE", async () => { delete sessions["voice|+1 (917) 555-0199"]; return say("voice", "Hi again, any news on the dispute?"); }],
+      ["On her usual number (MEDIUM), she asks to change her phone number → refused", () => say("voice", "Please update my phone number to 917 555 0199", {identifier: "+1 (212) 555-0142"})],
+    ]},
+  { title: "Shared household landline", tag: "one number, two customers",
+    why: "Maya and Arjun share a home landline. Picking either customer would leak the other's memory, so an ambiguous identifier is treated like an unknown one until the caller proves who they are.",
+    legacy: "Screen pop shows the first match: a common source of cross-customer disclosure.",
+    prod: "Household graph from the customer profile utility; caller picks an account or authenticates.",
+    customer: "CUST-1004",
+    steps: [
+      ["Call from the shared landline", () => say("voice", "Hi, where's my debit card?", {identifier: "+1 (212) 555-0100"})],
+      ["Arjun keys in his account number", async () => { const s = await api("POST", "/identity/step-up/start", {channel:"voice", identifier:"+1 (212) 555-0100", account_number:"ACC-77310077"}); window._ch = s; return `${s.status}: ${s.delivered_to} · demo code ${s.demo_code}`; }],
+      ["Verified as Arjun, with no access to Maya's memories", async () => { const v = await api("POST", "/identity/step-up/verify", {challenge_id: window._ch.challenge_id, code: window._ch.demo_code});
+        sessions["voice|+1 (212) 555-0100"] = v.session_id; setCustomer(v.customer_id); $("#voice .id input").value = "+1 (212) 555-0100"; return `${v.status} → ${v.customer_id}`; }],
+      ["Arjun's call continues in his own memory scope", () => say("voice", "Thanks. Is my debit card active?")],
+    ]},
+  { title: "Contact center → CRM", tag: "screen pop, routing, wrap-up into CRM",
+    why: "Memory has to reach the human agent too. The contact flow gets a token, assurance and queue (no PII); the CRM desktop gets open issues from the SOR, memory highlights with provenance, other-channel activity and next-best actions. Wrap-up notes are logged to CRM and become a governed memory.",
+    legacy: "Agent desktop shows SOR data only; context from chat/IVR is lost at transfer.",
+    prod: "Contact flow → Lambda/Cloud Run → this connector; CRM write-back via the CRM API with an outbox.",
+    customer: "CUST-1001",
+    steps: [
+      ["Chat first, so there is cross-channel context", () => say("web_chat", "I'm worried about the Skyline hotel charge dispute, I'll call you")],
+      ["Inbound call hits the contact flow (intent: dispute)", async () => { const o = await connectContact("+12125550142", "dispute"); return `routed to ${o.contact_attributes.route_queue}, priority ${o.contact_attributes.priority}`; }],
+      ["Daniel calls: accessibility need drives routing", async () => { const o = await connectContact("+16465550177", "replacement card"); return `routed to ${o.contact_attributes.route_queue}`; }],
+      ["Back to Maya's contact: agent wraps up into CRM", async () => { const o = await connectContact("+12125550142", "dispute");
+        const r = await api("POST", `/connect/contact/${o.contact_id}/wrap-up`, {disposition:"Resolved - info given", notes:"Customer wants a paper copy of the dispute letter. Card 4111 1111 1111 1111 mentioned on the call.", agent_id:"agent-007"});
+        refreshAll(); showTab("events"); return `CRM ${r.crm_activity.activity_id} · ${r.crm_activity.taxonomy_code} · notes stored as: "${r.crm_activity.notes}"`; }],
+    ]},
+  { title: "SOR update supersedes memory", tag: "event-driven, no stale answers",
+    why: "The system of record wins. When the dispute is resolved in the cards system, an event supersedes the old 'under review' memory (v1 → v2), Memory Bank deletes the stale copy, and every channel answers with the new status.",
+    legacy: "Interaction events and SOR updates flow on separate pipelines; downstream copies drift.",
+    prod: "Consume the SOR's certified business events from the interaction stream; idempotent on event_id.",
+    customer: "CUST-1001",
+    steps: [
+      ["Voice: status today", () => say("voice", "What's the status of my hotel dispute?")],
+      ["Cards SOR publishes: DSP-5521 resolved", async () => { const r = await api("POST", "/sor/events", {system:"Cards", ref_id:"DSP-5521", status:"Resolved", detail:"credit of $412.80 issued"}); return `published to sor.case.updated.v1 partition ${r.partition} offset ${r.offset}`; }],
+      ["Email: answer reflects the SOR, not the old memory", () => say("email", "Hi, any news on my hotel dispute?")],
+      ["Ledger shows v1 SUPERSEDED → v2 ACTIVE", async () => { showTab("ledger"); return "see Memory ledger tab"; }],
+    ]},
+  { title: "Tokenized customer identity", tag: "memory never sees the customer ID",
+    why: "Memory Bank, sessions, the event bus and the audit log are keyed by an HMAC token (partition-scoped). A leaked memory export can't be joined to a customer without the key. Only the gateway detokenizes, and every detokenize is audited with a purpose.",
+    legacy: "Enterprise customer identifier copied into every downstream store.",
+    prod: "Key in Cloud KMS/HSM or the enterprise tokenization service; versioned tokens for rotation.",
+    customer: "CUST-1001",
+    steps: [
+      ["A normal turn: look at 'Memory scope' in the trace", () => say("web_chat", "Is my Lisbon trip noted?")],
+      ["The event on the bus: token + taxonomy, no text", async () => { showTab("events"); return "see Events tab: payload has customer_token, taxonomy_code, memory refs"; }],
+      ["DSAR export: detokenize is audited", async () => { const x = await api("GET", `/customers/CUST-1001/export`); showTab("audit"); refreshAll(); return `${x.memories.length} records exported for token ${x.customer_token}; DETOKENIZE logged`; }],
+    ]},
+  { title: "Memory lifecycle", tag: "TTL by topic, supersede, expire",
+    why: "Each topic has a retention rule: a trip expires 14 days after its last date, a resolved issue 30 days after resolution, conversation details after 90 days, preferences only when changed. Move the demo clock and run the sweeper to watch memories expire; expired memories are deleted from Memory Bank and filtered at read time as a second line of defence.",
+    legacy: "Interaction history kept indefinitely; no per-purpose retention.",
+    prod: "Per-memory TTL on create (native Memory Bank expiry) + engine ttl_config backstop + nightly sweeper.",
+    customer: "CUST-1001",
+    steps: [
+      ["Save a dated trip", () => say("web_chat", "Please remember that I fly to Rome on December 1, 2026 until December 5, 2026")],
+      ["Ledger: expiry = last trip date + 14 days", async () => { showTab("ledger"); return "the Rome record expires 2026-12-19; the closed travel-notice case expires 30 days after closure"; }],
+      ["Advance the clock 25 days and run the sweeper", async () => { await api("POST", "/ops/clock/advance", {days: 25}); const x = await api("POST", "/ops/lifecycle/sweep"); refreshAll(); return `expired ${x.expired.length}: ${x.expired.map(e => e.topic + " (" + e.text.slice(0, 50) + "…)").join("; ")}`; }],
+      ["Recall after expiry: the trip is no longer used", () => say("voice", "Do you have my Rome trip on file?")],
+      ["Reset the clock", async () => { await api("POST", "/ops/clock/advance", {reset: true}); refreshAll(); return "clock reset"; }],
+    ]},
+  { title: "Governance & compliance", tag: "redaction, special categories, consent, legal hold, audit",
+    why: "Every write passes a policy: full numbers are masked (Luhn-checked cards, SSNs, accounts, phones, emails); health and other special-category data is never stored; accessibility needs are allowed but RESTRICTED; consent withdrawal stops writes and erases; a legal hold blocks erasure; the audit log is hash-chained.",
+    legacy: "Free-text notes in CRM with manual PII clean-up.",
+    prod: "DLP API for redaction, policy engine for decisions, audit to WORM storage / SIEM.",
+    customer: "CUST-1001",
+    steps: [
+      ["Customer reads out a full card number", () => say("web_chat", "Please remember that my backup card 4111 1111 1111 1111 should be used for the hotel")],
+      ["Health information is refused", () => say("web_chat", "Please remember that I'm in hospital for chemo next month")],
+      ["Daniel: legal hold blocks erasure", async () => { setCustomer("CUST-1002"); await api("POST", "/customers/CUST-1002/legal-hold", {on:true}); const r = await api("POST", "/customers/CUST-1002/erase"); refreshAll(); return `erase → ${r.status}: ${r.reason}`; }],
+      ["Lucia withdraws consent: memory erased, session-only from now", async () => { setCustomer("CUST-1003"); const r = await api("POST", "/customers/CUST-1003/consent", {granted:false}); refreshAll(); return `erased ${r.erasure.records} records`; }],
+      ["Lucia keeps chatting: nothing is stored", () => say("web_chat", "Please remember that I'm opening a second store in March")],
+      ["Audit tab: chain verified", async () => { showTab("audit"); await api("POST", "/customers/CUST-1002/legal-hold", {on:false}); await api("POST", "/customers/CUST-1003/consent", {granted:true}); return "legal hold released and consent restored for the next run"; }],
+    ]},
+  { title: "Resilience", tag: "outage, timeout, circuit breaker, outbox",
+    why: "The conversation must never fail because memory failed. Reads have an 800 ms budget and fall back to live context + SOR profile; three failures open the circuit; writes go to an outbox with idempotency keys and replay when the bank is back.",
+    legacy: "Synchronous dependency: if the history service is down, the agent desktop is empty.",
+    prod: "Outbox on Pub/Sub/Firestore, DLQ alerting, per-instance breakers, regional failover per partition.",
+    customer: "CUST-1001",
+    steps: [
+      ["Memory Bank goes down", async () => { await api("POST", "/ops/faults", {memory_bank:"down"}); refreshAll(); return "fault injected: 503 on every Memory Bank call"; }],
+      ["Chat still answers; the new fact is queued", () => say("web_chat", "Please remember that I'm travelling to Porto on November 15, 2026")],
+      ["Two more calls: circuit opens", async () => { await say("voice", "Any news on my dispute?"); return say("email", "Any news on my dispute?"); }],
+      ["Memory Bank recovers; outbox replays", async () => { await api("POST", "/ops/faults", {memory_bank:"ok"}); const r = await api("POST", "/ops/outbox/drain"); refreshAll(); showTab("ops"); return `delivered ${r.delivered}, pending ${r.pending}, dead-lettered ${r.dead_lettered}`; }],
+      ["The queued fact is now recalled", () => say("voice", "Do you have my Porto trip noted?")],
+      ["Slow bank: read exceeds the 800 ms budget", async () => { await api("POST", "/ops/faults", {memory_bank:"slow", slow_ms:1500}); const r = await say("web_chat", "Status of my hotel dispute?"); await api("POST", "/ops/faults", {memory_bank:"ok"}); refreshAll(); return r; }],
+    ]},
+  { title: "Cost, throughput, partitions & quotas", tag: "extraction economics at scale",
+    why: "Extraction is an LLM call per write: the main cost and the tightest quota. The policy decides when to extract (every turn, salient turns only, or once per contact). Partitions give each line of business its own scope, quota and cost line, so a consumer spike can't starve business banking.",
+    legacy: "Batch analytics pipeline; no per-interaction cost model.",
+    prod: "Quota increase requests sized from the capacity plan; one Agent Engine per partition/region; BigQuery billing export by label.",
+    customer: "CUST-1001",
+    steps: [
+      ["Small talk is not extracted (salient policy)", () => say("voice", "ok thanks, that's all")],
+      ["Switch to per_turn: the same small talk costs an extraction", async () => { await api("POST", "/ops/extraction-policy", {mode:"per_turn", batch_turns:6}); return say("voice", "ok thanks, that's all"); }],
+      ["Back to salient; open Cost & quotas", async () => { await api("POST", "/ops/extraction-policy", {mode:"salient", batch_turns:6}); showTab("cost"); refreshAll(); return "per-partition meters and live token buckets"; }],
+      ["Burst: 300 contacts under each policy", async () => { showTab("cost"); const t = await burstCompare(); $("#cost").append(el("div", {class:"section-t"}, "Scenario burst result"), t); return "see the table at the bottom of Cost & quotas"; }],
+      ["Capacity plan: 2M contacts/month", async () => { const c = await api("GET", "/ops/capacity?contacts_per_month=2000000&mode=salient"); $("#cost").append(el("div", {class:"section-t"}, "Scenario capacity plan"), capTable(c)); return `${c.monthly.extraction_calls.toLocaleString()} extractions/month · $${c.cost_usd.total_with_storage_usd.toLocaleString()} (illustrative) · peak ${c.throughput.peak_extract_qpm} QPM`; }],
+    ]},
+];
+
+let current = null, running = false;
+SC.forEach((s, i) => $("#scn-list").append(el("div", {class:"scn", "data-i": i, onclick: () => pick(i)}, el("b", {}, el("span", {class:"num"}, i+1), s.title), el("span", {}, s.tag))));
+function pick(i) {
+  if (running) return;
+  current = i; const s = SC[i];
+  document.querySelectorAll(".scn").forEach(n => n.classList.toggle("active", +n.dataset.i === i));
+  $("#story-title").textContent = `${i+1}. ${s.title}`;
+  $("#btn-run").disabled = false;
+  const body = $("#story-body"); body.replaceChildren(
+    el("p", {class:"why"}, s.why),
+    el("dl", {class:"kv"}, el("dt", {}, "Legacy today"), el("dd", {}, s.legacy), el("dt", {}, "In production"), el("dd", {}, s.prod)),
+    el("ol", {class:"steps", id:"steps"}, s.steps.map(([t]) => el("li", {}, t, el("span", {class:"res"})))));
+  if (s.customer && s.customer !== cust()) setCustomer(s.customer);
+}
+$("#btn-run").addEventListener("click", async () => {
+  if (current == null || running) return;
+  running = true; $("#btn-run").disabled = true;
+  const s = SC[current]; if (s.customer) setCustomer(s.customer);
+  const lis = document.querySelectorAll("#steps li");
+  lis.forEach(li => { li.className = ""; li.querySelector(".res").textContent = ""; });
+  for (let k = 0; k < s.steps.length; k++) {
+    lis[k].className = "run"; lis[k].scrollIntoView({block:"nearest"});
+    try {
+      const r = await s.steps[k][1]();
+      lis[k].querySelector(".res").textContent = typeof r === "string" ? r : (r && r.text ? "→ " + r.text.split("\n").filter(Boolean).slice(0,3).join(" ") : "");
+    } catch (e) { lis[k].querySelector(".res").textContent = "error: " + (e.message || e); }
+    lis[k].className = "done"; await sleep(500);
+  }
+  running = false; $("#btn-run").disabled = false;
+});
+
+$("#cust").addEventListener("change", () => setCustomer(cust()));
+$("#btn-reset-view").addEventListener("click", () => { document.querySelectorAll(".log").forEach(l => l.replaceChildren()); for (const k in sessions) delete sessions[k]; });
+setIdentifiers(cust()); refreshAll();
 </script>
 </body>
 </html>

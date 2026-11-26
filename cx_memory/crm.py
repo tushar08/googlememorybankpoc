@@ -1,0 +1,168 @@
+"""Contact center + CRM integration.
+
+How memory reaches the HUMAN agent, not just the bots:
+
+  1. Contact arrives (contact-center flow, e.g. Amazon Connect: ContactId, CustomerEndpoint, Attributes).
+     The flow calls POST /connect/contact (a Lambda in a Connect flow would do the same call).
+  2. The connector resolves identity, reads governed memory, and returns
+       * contact attributes for the flow: token, assurance, queue, priority. Small, no PII;
+       * a CRM screen pop for the agent desktop: open issues from the SOR, memory highlights with
+         provenance, recent activity on other channels, and next-best actions.
+  3. After-contact work: POST /connect/contact/{id}/wrap-up writes the CRM activity (disposition,
+     taxonomy code, redacted notes), turns the agent's notes into a governed memory, and publishes the
+     interaction event. CRM stays the system of record for the case; memory keeps the context.
+  4. CRM or SOR case updates come back as events (POST /sor/events) and supersede stale memories.
+"""
+from __future__ import annotations
+
+import re
+import uuid
+from typing import TYPE_CHECKING
+
+from . import clock
+from .channels import Channel
+from .events import TOPIC_CRM, TOPIC_INTERACTIONS, classify
+from .governance import Assurance, redact
+from .governed_memory import TurnContext, reset_turn, set_turn
+from .profiles import load_profile
+
+if TYPE_CHECKING:
+    from .gateway import OmnichannelGateway
+
+CONNECT_CHANNEL = {"VOICE": Channel.VOICE, "CHAT": Channel.WEB_CHAT, "EMAIL": Channel.EMAIL, "TASK": Channel.EMAIL}
+
+
+def route_queue(profile: dict, intent: str, accessibility: bool) -> str:
+    if accessibility:
+        return "Accessibility-Trained-Agents"
+    has_dispute = any(c.get("open_dispute") and "resolved" not in c["open_dispute"]["status"].lower() for c in profile["cards"])
+    if has_dispute and re.search(r"dispute|charge", intent or "", re.IGNORECASE):
+        return "Card-Disputes"
+    if profile["segment"] == "Private Client":
+        return "Private-Client-Desk"
+    if profile["segment"] == "Small Business":
+        return "Business-Banking"
+    return "General-Servicing"
+
+
+def next_best_actions(profile: dict, memories: list[dict], identity_notes: list[str]) -> list[str]:
+    nba = []
+    for c in profile["cards"]:
+        d = c.get("open_dispute")
+        if d:
+            nba.append(f"Give the status of dispute {d['id']} ({d['status']}); the customer has already explained it")
+        if c.get("replacement"):
+            nba.append(f"Replacement card: {c['replacement']}")
+    for k in profile["cases"]:
+        if k["status"].lower() not in ("closed", "resolved"):
+            nba.append(f"Open case {k['case_id']} ({k['topic']}): {k['status']}")
+    texts = " ".join(m["text"] for m in memories)
+    if trip := re.search(r"\b(?:to|in)\s+(Lisbon|[A-Z][a-z]{3,})\b.*?(\w+ \d{1,2}(?:, 20\d\d)?|20\d\d-\d\d-\d\d)", texts):
+        nba.append(f"Upcoming travel to {trip.group(1)} ({trip.group(2)}): confirm the travel notice is active")
+    pref = profile["preferences"]
+    if pref.get("accessibility"):
+        nba.append(f"Accessibility: {pref['accessibility']}")
+    if pref.get("contact_window"):
+        nba.append(f"Respect the contact window for call-backs: {pref['contact_window']}")
+    if any("NEW DEVICE" in n for n in identity_notes):
+        nba.append("Recently linked number: no contact-detail changes or payments without step-up")
+    return nba
+
+
+class CrmConnector:
+    def __init__(self, gw: "OmnichannelGateway") -> None:
+        self.gw = gw
+        self.contacts: dict[str, dict] = {}
+        self.activities: list[dict] = []
+
+    async def inbound_contact(self, event: dict) -> dict:
+        contact_id = event.get("ContactId") or str(uuid.uuid4())
+        ch = CONNECT_CHANNEL.get(str(event.get("Channel", "VOICE")).upper(), Channel.VOICE)
+        address = (event.get("CustomerEndpoint") or {}).get("Address", "")
+        attrs = event.get("Attributes") or {}
+        intent = attrs.get("intent", "")
+        res = self.gw.identity.resolve_contact(ch, address)
+        if res.status != "resolved":
+            self.gw.audit.append("CRM_CONTACT_UNVERIFIED", actor="contact-center", details={"contact_id": contact_id, **res.view()})
+            return {"contact_id": contact_id,
+                    "contact_attributes": {"verified": "false", "assurance": res.assurance.name,
+                                           "route_queue": "Identity-Verification", "reason": res.status},
+                    "screen_pop": None, "identity": res.view()}
+
+        cid = res.customer_id
+        part, token = self.gw.scope(cid)
+        profile = load_profile(cid)
+        ctx = TurnContext(customer_token=token, app_name=part.app_name, partition=part.name, channel=ch.value,
+                          assurance=res.assurance, actor="crm-screen-pop", memory=self.gw.memory_service, live=self.gw.live)
+        h = set_turn(ctx)
+        try:
+            await self.gw.memory_service.search_memory(app_name=part.app_name, user_id=token,
+                                                       query=intent or "open dispute travel trip contact preference issue")
+        finally:
+            reset_turn(h)
+        highlights = ctx.trace["memories_used"][:6]
+        accessibility = bool(profile["preferences"].get("accessibility"))
+        queue = route_queue(profile, intent, accessibility)
+        open_issues = [{"ref": c["open_dispute"]["id"], "type": "Card dispute", "status": c["open_dispute"]["status"],
+                        "detail": f"${c['open_dispute']['amount_usd']:.2f} at {c['open_dispute']['merchant']}"}
+                       for c in profile["cards"] if c.get("open_dispute")]
+        open_issues += [{"ref": k["case_id"], "type": k["topic"], "status": k["status"], "detail": k["detail"]}
+                        for k in profile["cases"] if k["status"].lower() not in ("closed",)]
+        screen_pop = {
+            "crm_record_id": f"CRM-{cid}",   # CRM is a system of record: it may hold the real customer ID
+            "customer": f"{profile['first_name']} {profile['last_name']}", "segment": profile["segment"],
+            "customer_since": profile["customer_since"], "identity": res.view(),
+            "open_issues": open_issues, "memory_highlights": highlights,
+            "recent_activity_other_channels": self.gw.live.view(token)[-4:],
+            "next_best_actions": next_best_actions(profile, highlights, res.notes),
+            "degraded": ctx.trace["degraded"],
+        }
+        self.contacts[contact_id] = {"customer_id": cid, "token": token, "partition": part, "channel": ch,
+                                     "assurance": res.assurance, "queue": queue, "started_at": clock.now()}
+        self.gw.audit.append("CRM_SCREEN_POP", actor="contact-center", customer_token=token,
+                             details={"contact_id": contact_id, "queue": queue,
+                                      "memories_shown": [m["memory_id"] for m in highlights]})
+        return {
+            "contact_id": contact_id,
+            "contact_attributes": {  # returned to the contact flow: keep it small and free of PII
+                "verified": "true", "customer_token": token, "assurance": res.assurance.name, "route_queue": queue,
+                "priority": "high" if profile["segment"] == "Private Client" or open_issues else "normal",
+                "greeting_first_name": profile["first_name"],
+            },
+            "screen_pop": screen_pop,
+        }
+
+    async def wrap_up(self, contact_id: str, *, disposition: str, notes: str, agent_id: str) -> dict:
+        c = self.contacts.get(contact_id)
+        if c is None:
+            return {"status": "unknown contact"}
+        part, token = c["partition"], c["token"]
+        # A human agent who handled the contact has verified the caller in the conversation.
+        ctx = TurnContext(customer_token=token, app_name=part.app_name, partition=part.name, channel=c["channel"].value,
+                          assurance=max(c["assurance"], Assurance.MEDIUM), actor=f"crm-agent:{agent_id}",
+                          memory=self.gw.memory_service, live=self.gw.live)
+        h = set_turn(ctx)
+        try:
+            mem = await self.gw.memory_service.write_fact(
+                app_name=part.app_name, user_id=token, text=f"Agent note ({disposition}): {notes}",
+                topic="key_conversation_details", source_kind="crm_note", ctx=ctx)
+        finally:
+            reset_turn(h)
+        activity = {
+            "activity_id": f"ACT-{uuid.uuid4().hex[:8].upper()}", "crm_record_id": f"CRM-{c['customer_id']}",
+            "contact_id": contact_id, "channel": c["channel"].value, "queue": c["queue"], "agent_id": agent_id,
+            "disposition": disposition, "taxonomy_code": classify(notes), "notes": redact(notes)[0],
+            "memory_id": mem.get("memory_id"), "memory_status": mem["status"],
+            "handle_time_s": int(clock.now() - c["started_at"]), "logged_at": clock.iso(clock.now()),
+        }
+        self.activities.append(activity)
+        await self.gw.bus.publish(TOPIC_CRM, token, {k: v for k, v in activity.items() if k != "notes"})
+        await self.gw.bus.publish(TOPIC_INTERACTIONS, token, {
+            "event_type": "CustomerInteraction", "schema_version": "1.0", "taxonomy_code": activity["taxonomy_code"],
+            "channel": c["channel"].value, "customer_token": token, "partition": part.name, "assurance": ctx.assurance.name,
+            "occurred_at": activity["logged_at"], "source": "crm-after-contact-work",
+            "memory_refs_written": [mem.get("memory_id")] if mem.get("memory_id") else []})
+        await self.gw.live.note(token, c["channel"].value, f"human agent wrap-up: {disposition}")
+        self.gw.audit.append("CRM_ACTIVITY_LOGGED", actor=f"crm-agent:{agent_id}", customer_token=token,
+                             details={"activity_id": activity["activity_id"], "memory_id": mem.get("memory_id")})
+        return {"crm_activity": activity, "memory": mem}
