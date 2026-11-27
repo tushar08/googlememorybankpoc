@@ -163,6 +163,45 @@ Fault injection (`POST /ops/faults` with `ok` | `slow` | `down` | `throttled`) s
 Code: `cx_memory/resilience.py`, `governed_memory._guarded`.
 Production: outbox on Pub/Sub or Firestore drained by a Cloud Run job, DLQ alerting, regional failover per partition.
 
+## 9. Client servicing journeys (digital assistant → specialist, with context)
+
+The client's target experience: the customer uses their channel of choice, the bank anticipates the need,
+context and authentication move with the customer when they switch channel, and the specialist knows why the
+customer is calling, gets predicted suggested actions and relevant content, and never re-authenticates.
+
+| Journey | Customer · test data | What is checked |
+|---|---|---|
+| **UC-D1** Predicted fee waiver + offer | Arjun · savings $5.00 monthly service fee; engine predicts `FEE_WAIVER` (0.81); pre-qualified card offer | assistant confirms the predicted intent, waives a deposit fee within its authority, offers the next-best action, transfers to the sales queue in chat with context |
+| **UC-D2** Unrecognized charge → live chat | Daniel · July statement with `QXT*DIGITAL SVCS $89.99`; no prediction | NLU intent, statement search, opt-out to an agent; agent greets with the reason, auth carried over, suggested action cites the descriptor article |
+| **UC-O1** Digital → voice | as UC-D2, call from the phone on file | click-to-dial with handoff token, IVR redeems it, risk check passes, proficiency routing to fraud/disputes |
+| **UC-N** Known-intent fulfilment | Maya · $40.00 minimum due in 2 days; late fee $40.00 (Oct 15), FX fee $6.15; fees team has agents | predicted payment paid in the app → fee inquiry → late-fee waiver outside digital authority → specialist availability → context stored → voice → auto-auth → fees queue → specialist waives → context updated → app shows the outcome on return |
+| **UC-NEG** Negative paths | as UC-N | FX fee not waivable, call from an unknown number needs step-up, token replay refused, token expired after 15 min |
+
+How it works:
+
+* **Dialog manager first, LLM second** (`cx_memory/digital.py`). Known servicing intents (payment, fee inquiry, fee
+  waiver, unrecognized charge, escalation, next-best offer) are deterministic, so amounts and actions are never
+  made up; anything else falls through to the web chat LLM agent with governed memory.
+* **Recommendation engine stub** (`data/source_systems/insights.json`): predicted intent with confidence, and the
+  next-best (personalization) action.
+* **Authority rules** (`cx_memory/servicing.py`): the assistant can waive deposit-account fees up to $35 once per
+  12 months; card late fees need a specialist; disclosed FX fees aren't waived.
+* **Context store + handoff token** (`cx_memory/context_store.py`): on escalation the assistant stores auth state,
+  reason code, a redacted summary, what was already done and referenced transactions, and gets a single-use token
+  (15-minute TTL). The token rides on click-to-dial or the chat transfer.
+* **Risk-based assessment on channel switch**: channel risk + intent risk + identifier on file + token age.
+  Low → authentication carries over (`HIGH`); medium → step-up; high → fraud queue.
+* **Proficiency routing** (`data/source_systems/specialists.json`): reason code → skilled queue with someone
+  available, else general servicing with a call-back offer (honouring the customer's contact window).
+* **Specialist desktop**: why the customer is calling, what was done in the app (don't repeat it), predicted
+  suggested actions with eligibility, knowledge articles for the reason code, and the opening line.
+* **Fulfilment back to the app**: wrap-up with `fulfilment` updates the context store and memory; the next app
+  session opens with the outcome.
+
+Test data and expected results are in `eval/client_use_cases.json`. Run them with
+`python eval/run_client_use_cases.py`, with `pytest -q tests/test_client_journeys.py`, or from the console's
+**Client test data** tab (scenarios 11–14 play them step by step).
+
 ---
 
 ## API summary
@@ -171,9 +210,10 @@ Production: outbox on Pub/Sub or Firestore drained by a Cloud Run job, DLQ alert
 |---|---|
 | Channels | `POST /channels/web-chat`, `/channels/voice`, `/channels/email`, `/demo/concurrent`, `/sessions/{id}/end` |
 | Identity | `POST /identity/step-up/start`, `/identity/step-up/verify` |
-| Contact center / CRM | `POST /connect/contact`, `/connect/contact/{id}/wrap-up`, `GET /crm/activities`, `POST /sor/events` |
+| Digital assistant | `POST /digital/session`, `/digital/message`, `/digital/escalate`; `GET /context/{handoff_token}`, `/customers/{id}/insights` |
+| Contact center / CRM | `POST /connect/contact` (with `Attributes.handoff_token` for channel switches), `/connect/contact/{id}/wrap-up`, `GET /crm/activities`, `POST /sor/events` |
 | Customer privacy | `GET /customers/{id}/memories`, `/ledger`, `/export`; `POST /customers/{id}/consent`, `/legal-hold`, `/erase` |
-| Ops | `GET /ops/status`, `/ops/capacity`, `/ops/audit`, `/ops/events`; `POST /ops/faults`, `/ops/outbox/drain`, `/ops/extraction-policy`, `/ops/clock/advance`, `/ops/lifecycle/sweep`, `/ops/burst` |
+| Ops | `GET /ops/status`, `/ops/capacity`, `/ops/audit`, `/ops/events`; `/ops/client-use-cases`; `POST /ops/client-use-cases/run`, `/ops/servicing/reset`, `/ops/faults`, `/ops/outbox/drain`, `/ops/extraction-policy`, `/ops/clock/advance`, `/ops/lifecycle/sweep`, `/ops/burst` |
 
 ## What is still simplified
 

@@ -25,7 +25,7 @@ Tier 1 makes a chat turn visible to a voice call straight away. Tier 2 holds dur
 
 ## What makes it production-shaped
 
-The demo console runs ten scenarios end to end. [docs/SCENARIOS.md](docs/SCENARIOS.md) explains each one: design, code and the production mapping.
+The demo console runs fourteen scenarios end to end. [docs/SCENARIOS.md](docs/SCENARIOS.md) explains each one: design, code and the production mapping.
 
 | # | Scenario | What it shows |
 |---|---|---|
@@ -39,6 +39,9 @@ The demo console runs ten scenarios end to end. [docs/SCENARIOS.md](docs/SCENARI
 | 8 | Governance & compliance | Luhn-checked redaction, special-category block, consent withdrawal, legal hold, DSAR export, hash-chained audit |
 | 9 | Resilience | Memory Bank down/slow → degraded answers, circuit breaker, outbox replay with idempotency |
 | 10 | Cost, throughput, partitions & quotas | extraction policies (per_turn / salient / batched), per-turn cost, burst test, capacity plan, per-partition quotas |
+| 11–14 | Client servicing journeys | predicted intent, digital fulfilment, context handoff token from the in-app assistant to live chat or voice, risk-based auth carry-over, proficiency routing, specialist suggested actions, outcome back in the app |
+
+The client journeys and their test data are in `eval/client_use_cases.json` (run: `python eval/run_client_use_cases.py`).
 
 ## Repository map
 
@@ -61,7 +64,9 @@ The demo console runs ten scenarios end to end. [docs/SCENARIOS.md](docs/SCENARI
 | `preload_memory` / `save_customer_fact` / `after_agent_callback` | `cx_memory/tools.py`, `cx_memory/callbacks.py` |
 | Synthetic profiles from 5 source systems | `data/source_systems/*.json`, `cx_memory/profiles.py`, `scripts/ingest_profiles.py` |
 | FastAPI endpoints and scenario console | `cx_memory/api.py`, `cx_memory/static/demo.html` |
-| 43 offline tests (21 core + 22 scenario) | `tests/test_offline.py`, `tests/test_scenarios.py` |
+| Digital assistant (dialog manager + LLM fallback), context store + handoff tokens, servicing systems | `cx_memory/digital.py`, `cx_memory/context_store.py`, `cx_memory/servicing.py` |
+| Client journeys: test data, runner | `eval/client_use_cases.json`, `eval/run_client_use_cases.py` |
+| 48 offline tests (21 core + 22 scenario + 5 client journeys) | `tests/test_offline.py`, `tests/test_scenarios.py`, `tests/test_client_journeys.py` |
 | 9-step storyline benchmark, 7 metrics | `eval/storyline.json`, `eval/metrics.py`, `eval/run_storyline.py` |
 
 ## Quick start
@@ -71,7 +76,7 @@ python3.12 -m venv .venv && source .venv/bin/activate   # Python 3.10+
 pip install -r requirements.txt
 
 # 0. Offline: no GCP needed
-pytest -q                                   # 43 passed
+pytest -q                                   # 48 passed
 FAKE_MODEL=1 BACKEND=local uvicorn cx_memory.api:app --port 8080   # open http://localhost:8080, pick a scenario, Run
 
 # 1. GCP setup (once)

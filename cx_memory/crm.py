@@ -23,6 +23,7 @@ from . import clock
 from .channels import Channel
 from .events import TOPIC_CRM, TOPIC_INTERACTIONS, classify
 from .governance import Assurance, redact
+from .identity import normalize_phone
 from .governed_memory import TurnContext, reset_turn, set_turn
 from .profiles import load_profile
 
@@ -69,6 +70,37 @@ def next_best_actions(profile: dict, memories: list[dict], identity_notes: list[
     return nba
 
 
+def suggested_actions(gw, customer_id: str, h) -> list[str]:
+    """Predicted suggested actions for the specialist, from the reason code and the SOR."""
+    sv, out = gw.servicing, []
+    if h.reason_code == "FEE_WAIVER" and (fee := h.context.get("fee")):
+        e = sv.waiver_eligibility(customer_id, fee["txn_id"], "specialist")
+        out.append(f"Approve a one-time courtesy waiver of the ${fee['amount_usd']:.2f} {fee['description'].lower()} "
+                   f"({fee['txn_id']}, {fee['date']}): " + ("eligible, no waiver in the last 12 months" if e["eligible"] else e["reason"]))
+        out.append("Confirm the next payment date so the late fee doesn't repeat; offer AutoPay")
+    elif h.reason_code == "UNRECOGNIZED_CHARGE":
+        for tid in h.context.get("candidate_charges") or []:
+            t = sv.txn(tid)
+            if t and "QXT*" in t["description"]:
+                out.append(f"Check descriptor first: {t['description']} ${t['amount_usd']:.2f} is a digital-services aggregator (KB-2211)")
+        out.append("If still unrecognized: lock the card, open a dispute, order a replacement")
+    elif h.reason_code == "PRODUCT_INTEREST" and (offer := h.context.get("offer")):
+        out.append(f"Customer is {offer['eligibility']} for the {offer['offer']} ({offer['offer_id']}): walk through fees and benefits")
+    for d in h.context.get("done_in_digital") or []:
+        out.append(f"Already done in the app, don't repeat: {d}")
+    return out
+
+
+def agent_greeting(first_name: str, h) -> str:
+    if h.reason_code == "FEE_WAIVER" and (fee := h.context.get("fee")):
+        return f"Hi {first_name}, I can help with waiving the ${fee['amount_usd']:.2f} {fee['description'].lower()} from {fee['date']}."
+    if h.reason_code == "UNRECOGNIZED_CHARGE":
+        return f"Hi {first_name}, I can look at the unrecognized charges for you."
+    if h.reason_code == "PRODUCT_INTEREST" and (offer := h.context.get("offer")):
+        return f"Hi {first_name}, I understand you'd like to hear about the {offer['offer']}."
+    return f"Hi {first_name}, I can see what you were doing in the app. How can I help?"
+
+
 class CrmConnector:
     def __init__(self, gw: "OmnichannelGateway") -> None:
         self.gw = gw
@@ -81,6 +113,8 @@ class CrmConnector:
         address = (event.get("CustomerEndpoint") or {}).get("Address", "")
         attrs = event.get("Attributes") or {}
         intent = attrs.get("intent", "")
+        if attrs.get("handoff_token"):
+            return await self._inbound_with_handoff(contact_id, ch, address, attrs["handoff_token"])
         res = self.gw.identity.resolve_contact(ch, address)
         if res.status != "resolved":
             self.gw.audit.append("CRM_CONTACT_UNVERIFIED", actor="contact-center", details={"contact_id": contact_id, **res.view()})
@@ -132,7 +166,69 @@ class CrmConnector:
             "screen_pop": screen_pop,
         }
 
-    async def wrap_up(self, contact_id: str, *, disposition: str, notes: str, agent_id: str) -> dict:
+    async def _inbound_with_handoff(self, contact_id: str, ch: Channel, address: str, token: str) -> dict:
+        """Channel switch from the digital assistant: redeem the context token, assess risk, route by reason code."""
+        gw = self.gw
+        peek = gw.context.handoffs.get(token)
+        on_file = False
+        if peek is not None:
+            if ch is Channel.VOICE:
+                on_file = normalize_phone(address) in gw.identity.contacts.get(peek.customer_id, {}).get("phones", []) or \
+                    gw.identity.resolve_contact(ch, address).customer_id == peek.customer_id
+            else:
+                on_file = True  # live chat transfer inside the same authenticated app session
+        h, risk = gw.context.redeem(token, channel="voice" if ch is Channel.VOICE else "live_chat",
+                                    identifier_matches=on_file, by="agent-engagement-platform")
+        if h is None or risk["decision"] != "auto_authenticated":
+            gw.audit.append("CRM_HANDOFF_REJECTED", actor="contact-center", details={"contact_id": contact_id, **{k: v for k, v in (risk or {}).items() if k != "assurance"}})
+            return {"contact_id": contact_id,
+                    "contact_attributes": {"verified": "false", "route_queue": "Identity-Verification",
+                                           "reason": risk["decision"] if risk else "invalid_token"},
+                    "screen_pop": None, "risk": {k: (v.name if k == "assurance" else v) for k, v in (risk or {}).items()}}
+        cid = h.customer_id
+        part, ctoken = gw.scope(cid)
+        profile = load_profile(cid)
+        route = gw.servicing.route(h.reason_code, "voice" if ch is Channel.VOICE else "live_chat")
+        ctx = TurnContext(customer_token=ctoken, app_name=part.app_name, partition=part.name, channel=ch.value,
+                          assurance=Assurance.HIGH, actor="crm-screen-pop", memory=gw.memory_service, live=gw.live)
+        hnd = set_turn(ctx)
+        try:
+            await gw.memory_service.search_memory(app_name=part.app_name, user_id=ctoken,
+                                                  query=f"{h.reason_code.replace('_', ' ').lower()} {h.summary}")
+        finally:
+            reset_turn(hnd)
+        suggested = suggested_actions(gw, cid, h)
+        greeting = agent_greeting(profile["first_name"], h)
+        screen_pop = {
+            "crm_record_id": f"CRM-{cid}", "customer": f"{profile['first_name']} {profile['last_name']}",
+            "segment": profile["segment"], "customer_since": profile["customer_since"],
+            "identity": {"status": "resolved", "assurance": "HIGH", "method": "digital_handoff_token",
+                         "notes": [f"authentication carried over from the app (risk score {risk['risk_score']}): do not re-verify"]},
+            "why_calling": {"reason_code": h.reason_code, "summary": h.summary, "from": h.source_channel,
+                            "done_in_digital": h.context.get("done_in_digital", []), "stored_at": clock.iso(h.created_at)},
+            "suggested_actions": suggested, "knowledge": gw.servicing.knowledge(h.reason_code),
+            "agent_greeting": greeting, "routing": route,
+            "open_issues": [], "memory_highlights": ctx.trace["memories_used"][:5],
+            "recent_activity_other_channels": gw.live.view(ctoken)[-4:],
+            "next_best_actions": suggested, "degraded": ctx.trace["degraded"],
+        }
+        self.contacts[contact_id] = {"customer_id": cid, "token": ctoken, "partition": part, "channel": ch,
+                                     "assurance": Assurance.HIGH, "queue": route["queue"], "started_at": clock.now(),
+                                     "handoff_token": token, "reason_code": h.reason_code}
+        await gw.live.note(ctoken, ch.value, f"customer moved from the app to {ch.value} ({h.reason_code}); context passed, no re-authentication")
+        gw.audit.append("CRM_SCREEN_POP", actor="contact-center", customer_token=ctoken,
+                        details={"contact_id": contact_id, "queue": route["queue"], "handoff": True, "reason_code": h.reason_code})
+        return {
+            "contact_id": contact_id,
+            "contact_attributes": {"verified": "true", "auth": "carried_over", "customer_token": ctoken, "assurance": "HIGH",
+                                   "route_queue": route["queue"], "skill": h.reason_code, "priority": "high",
+                                   "greeting_first_name": profile["first_name"]},
+            "risk": {**{k: v for k, v in risk.items() if k != "assurance"}, "assurance": risk["assurance"].name},
+            "screen_pop": screen_pop,
+        }
+
+    async def wrap_up(self, contact_id: str, *, disposition: str, notes: str, agent_id: str,
+                      fulfilment: dict | None = None) -> dict:
         c = self.contacts.get(contact_id)
         if c is None:
             return {"status": "unknown contact"}
@@ -155,6 +251,8 @@ class CrmConnector:
             "memory_id": mem.get("memory_id"), "memory_status": mem["status"],
             "handle_time_s": int(clock.now() - c["started_at"]), "logged_at": clock.iso(clock.now()),
         }
+        if fulfilment and c.get("handoff_token"):
+            activity["fulfilment"] = await self._fulfil(c, fulfilment, agent_id)
         self.activities.append(activity)
         await self.gw.bus.publish(TOPIC_CRM, token, {k: v for k, v in activity.items() if k != "notes"})
         await self.gw.bus.publish(TOPIC_INTERACTIONS, token, {
@@ -166,3 +264,22 @@ class CrmConnector:
         self.gw.audit.append("CRM_ACTIVITY_LOGGED", actor=f"crm-agent:{agent_id}", customer_token=token,
                              details={"activity_id": activity["activity_id"], "memory_id": mem.get("memory_id")})
         return {"crm_activity": activity, "memory": mem}
+
+    async def _fulfil(self, c: dict, fulfilment: dict, agent_id: str) -> dict:
+        """Specialist completes the known intent; the context store is updated for the customer's return to the app."""
+        gw, cid = self.gw, c["customer_id"]
+        h = gw.context.handoffs[c["handoff_token"]]
+        result: dict = {"action": fulfilment.get("action")}
+        if fulfilment.get("action") == "FEE_WAIVER" and (fee := h.context.get("fee")):
+            w = gw.servicing.waive_fee(cid, fee["txn_id"], "specialist", approver=agent_id)
+            ok = w["status"] == "waived"
+            msg = (f"your ${fee['amount_usd']:.2f} {fee['description'].lower()} was waived by a specialist (ref {w['ref']}). "
+                   f"It will show as a credit on your next statement." if ok else f"we couldn't waive the fee: {w.get('reason')}.")
+            result.update(status="completed" if ok else "declined", ref=w.get("ref"), message=msg)
+        else:
+            result.update(status=fulfilment.get("status", "completed"), message=fulfilment.get("message", "your request was completed by a specialist."))
+        gw.context.update_fulfilment(c["handoff_token"], result, by=f"crm-agent:{agent_id}")
+        await gw.memory_service.write_fact(app_name=c["partition"].app_name, user_id=c["token"],
+                                           text=f"Specialist outcome for {h.reason_code.replace('_', ' ').lower()}: {result['message']}",
+                                           topic="open_service_issues", source_kind="crm_note")
+        return result

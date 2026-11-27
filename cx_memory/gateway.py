@@ -24,7 +24,9 @@ from .agents import build_all_agents
 from .channels import Channel, enforce_voice, validate
 from .config import Settings, settings as default_settings
 from .cost import est_tokens
+from .context_store import ContextStore
 from .crm import CrmConnector
+from .digital import DigitalAssistant
 from .events import TOPIC_INTERACTIONS, TOPIC_SOR_CASE, EventBus, classify
 from .governance import Assurance, AuditLog
 from .governed_memory import GovernedMemoryService, TurnContext, reset_turn, set_turn
@@ -33,6 +35,7 @@ from .live_context import LiveContextStore
 from .local_memory import fact_entry
 from .profiles import all_customer_ids, apply_sor_update, load_profile, owner_of_ref, profile_summary, seed_facts
 from .quotas import Partition, PartitionRouter
+from .servicing import ServicingSystems
 from .services import build_services
 from .tokenization import TokenVault
 
@@ -96,7 +99,10 @@ class OmnichannelGateway:
             for p in self.router.partitions.values() for ch, agent in self.agents.items()
         }
         self.sessions: dict[str, SessionInfo] = {}
+        self.servicing = ServicingSystems()
+        self.context = ContextStore(audit=self.audit)
         self.crm = CrmConnector(self)
+        self.digital = DigitalAssistant(self)
         self.bus.subscribe(TOPIC_SOR_CASE, self._on_sor_event)
 
     # ------------------------------------------------------------------ helpers

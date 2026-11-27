@@ -163,11 +163,13 @@ class WrapUpIn(BaseModel):
     disposition: str
     notes: str
     agent_id: str = "agent-007"
+    fulfilment: dict | None = None  # e.g. {"action": "FEE_WAIVER"} when the specialist completes the known intent
 
 
 @app.post("/connect/contact/{contact_id}/wrap-up")
 async def connect_wrap_up(contact_id: str, body: WrapUpIn):
-    return await gateway().crm.wrap_up(contact_id, disposition=body.disposition, notes=body.notes, agent_id=body.agent_id)
+    return await gateway().crm.wrap_up(contact_id, disposition=body.disposition, notes=body.notes, agent_id=body.agent_id,
+                                      fulfilment=body.fulfilment)
 
 
 @app.get("/crm/activities")
@@ -185,6 +187,75 @@ class SorEventIn(BaseModel):
 @app.post("/sor/events")
 async def sor_event(body: SorEventIn):
     return await gateway().publish_sor_event(body.system, body.ref_id, body.status, body.detail)
+
+
+# ------------------------------------------------------------------ digital assistant + context handoff
+class DigitalStartIn(BaseModel):
+    account_id: str
+
+
+class DigitalMsgIn(BaseModel):
+    session_id: str
+    text: str
+
+
+class EscalateIn(BaseModel):
+    session_id: str
+    target: str = Field("voice", description="voice | live_chat | callback")
+
+
+@app.post("/digital/session")
+async def digital_start(body: DigitalStartIn):
+    """Customer opens the in-app assistant (already authenticated by the app)."""
+    return await gateway().digital.start(body.account_id)
+
+
+@app.post("/digital/message")
+async def digital_message(body: DigitalMsgIn):
+    return await gateway().digital.message(body.session_id, body.text)
+
+
+@app.post("/digital/escalate")
+async def digital_escalate(body: EscalateIn):
+    if body.target not in ("voice", "live_chat", "callback"):
+        raise HTTPException(400, "target must be voice, live_chat or callback")
+    return await gateway().digital.escalate(body.session_id, body.target)
+
+
+@app.get("/context/{handoff_token}")
+async def context_view(handoff_token: str):
+    """Ops view of a stored context (the customer ID is never returned)."""
+    h = gateway().context.handoffs.get(handoff_token)
+    if h is None:
+        raise HTTPException(404, "unknown handoff token")
+    return h.view()
+
+
+@app.post("/ops/servicing/reset")
+async def servicing_reset():
+    """Demo helper: restore the synthetic servicing data (fees, payments, queues) so journeys can be re-run."""
+    from .servicing import ServicingSystems
+
+    g = gateway()
+    g.servicing = ServicingSystems()
+    g.context.handoffs.clear()
+    g.digital.sessions.clear()
+    return {"status": "servicing data and context store restored"}
+
+
+@app.get("/ops/digital-token/{session_id}")
+async def digital_token(session_id: str):
+    """Demo helper: the handoff token the app would pass along with click-to-dial or chat transfer."""
+    s = gateway().digital.sessions.get(session_id)
+    if s is None or not s.handoff_token:
+        raise HTTPException(404, "no handoff for this session")
+    return {"handoff_token": s.handoff_token}
+
+
+@app.get("/customers/{customer_id}/insights")
+async def insights(customer_id: str):
+    sv = gateway().servicing
+    return {"predicted_intent": sv.predicted_intent(customer_id), "next_best_action": sv.next_best_action(customer_id)}
 
 
 # ------------------------------------------------------------------ customers: memory, lifecycle, privacy
@@ -352,6 +423,41 @@ async def burst(body: BurstIn):
     """Memory-layer burst test on a fresh, isolated in-process store (does not touch Memory Bank)."""
     return await run_burst(contacts=body.contacts, concurrency=body.concurrency, turns_per_contact=body.turns_per_contact,
                            mb_latency_ms=body.mb_latency_ms, mode=body.mode, app_base=gateway().cfg.app_name)
+
+
+@app.get("/ops/client-use-cases")
+async def client_use_cases():
+    """The client journeys and their synthetic test data (eval/client_use_cases.json)."""
+    from eval.run_client_use_cases import CASES
+
+    return {"use_cases": CASES}
+
+
+@app.post("/ops/client-use-cases/run")
+async def run_client_use_cases():
+    """Run every client journey on a fresh, isolated offline gateway and report each expected result."""
+    from google.adk.sessions import InMemorySessionService
+
+    from eval.run_client_use_cases import CASES, run_use_case
+    from tests.fake_llm import FakeLlm
+
+    from .config import Settings
+    from .local_memory import LocalMemoryService
+    from .profiles import _load
+
+    offset = clock.offset_days()
+    results = []
+    for uc in CASES:
+        clock.reset()
+        _load.cache_clear()
+        g = OmnichannelGateway(cfg=Settings(backend="local"), model=FakeLlm(),
+                               session_service=InMemorySessionService(), memory_service=LocalMemoryService())
+        await g.seed_all()
+        results.append({"id": uc["id"], "title": uc["title"], "steps": await run_use_case(g, uc)})
+    clock.reset()
+    clock.advance(days=offset)
+    _load.cache_clear()
+    return {"results": results}
 
 
 @app.get("/ops/audit")

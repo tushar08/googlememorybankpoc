@@ -1,0 +1,103 @@
+{
+  "system": "Transactions",
+  "transactions": [
+    {
+      "customer_id": "CUST-1001",
+      "txn_id": "TXN-81001",
+      "account": "card-4417",
+      "date": "2026-10-15",
+      "description": "Late payment fee",
+      "amount_usd": 40.0,
+      "type": "fee",
+      "fee_code": "LATE_FEE"
+    },
+    {
+      "customer_id": "CUST-1001",
+      "txn_id": "TXN-81002",
+      "account": "card-4417",
+      "date": "2026-10-22",
+      "description": "Foreign transaction fee (Lisbon booking)",
+      "amount_usd": 6.15,
+      "type": "fee",
+      "fee_code": "FX_FEE"
+    },
+    {
+      "customer_id": "CUST-1001",
+      "txn_id": "TXN-81003",
+      "account": "card-4417",
+      "date": "2026-10-29",
+      "description": "Skyline Hotels",
+      "amount_usd": 412.8,
+      "type": "purchase"
+    },
+    {
+      "customer_id": "CUST-1001",
+      "txn_id": "TXN-81004",
+      "account": "card-4417",
+      "date": "2026-11-03",
+      "description": "Grocery Market",
+      "amount_usd": 86.4,
+      "type": "purchase"
+    },
+    {
+      "customer_id": "CUST-1002",
+      "txn_id": "TXN-82001",
+      "account": "card-9032",
+      "date": "2026-07-08",
+      "description": "QXT*DIGITAL SVCS 800-555-0101",
+      "amount_usd": 89.99,
+      "type": "purchase",
+      "statement": "2026-07"
+    },
+    {
+      "customer_id": "CUST-1002",
+      "txn_id": "TXN-82002",
+      "account": "card-9032",
+      "date": "2026-07-12",
+      "description": "City Transit",
+      "amount_usd": 32.5,
+      "type": "purchase",
+      "statement": "2026-07"
+    },
+    {
+      "customer_id": "CUST-1002",
+      "txn_id": "TXN-82003",
+      "account": "card-9032",
+      "date": "2026-07-19",
+      "description": "Corner Pharmacy",
+      "amount_usd": 18.25,
+      "type": "purchase",
+      "statement": "2026-07"
+    },
+    {
+      "customer_id": "CUST-1004",
+      "txn_id": "TXN-84001",
+      "account": "ACC-77310077",
+      "date": "2026-11-01",
+      "description": "Monthly service fee",
+      "amount_usd": 5.0,
+      "type": "fee",
+      "fee_code": "MONTHLY_SERVICE_FEE"
+    },
+    {
+      "customer_id": "CUST-1003",
+      "txn_id": "TXN-83001",
+      "account": "ACC-90014533",
+      "date": "2026-11-05",
+      "description": "Wire transfer fee",
+      "amount_usd": 25.0,
+      "type": "fee",
+      "fee_code": "WIRE_FEE"
+    }
+  ],
+  "statements": [
+    {
+      "customer_id": "CUST-1001",
+      "account": "card-4417",
+      "statement_balance_usd": 1284.55,
+      "minimum_due_usd": 40.0,
+      "pay_from": "ACC-77310042",
+      "due_in_days": 2
+    }
+  ]
+}

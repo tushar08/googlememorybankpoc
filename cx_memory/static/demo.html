@@ -157,6 +157,7 @@
         <div class="pane" data-pane="cost"><div id="cost"></div></div>
         <div class="pane" data-pane="audit"><div id="audit"></div></div>
         <div class="pane" data-pane="events"><div id="events"></div></div>
+        <div class="pane" data-pane="client"><div id="client"></div></div>
       </div>
     </section>
   </div>
@@ -280,13 +281,13 @@ function renderTrace(j, ch) {
 }
 
 // ------------------------------------------------------------------ inspector tabs
-const TABS = [["trace","Turn trace"],["ledger","Memory ledger"],["ops","Resilience & ops"],["cost","Cost & quotas"],["audit","Audit"],["events","Events"]];
+const TABS = [["client","Client test data"],["trace","Turn trace"],["ledger","Memory ledger"],["ops","Resilience & ops"],["cost","Cost & quotas"],["audit","Audit"],["events","Events"]];
 for (const [k, label] of TABS) $("#tabs").append(el("button", {class:"tab", "data-t":k, onclick:() => showTab(k)}, label));
 function showTab(k) {
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.t === k));
   document.querySelectorAll("#insp .pane").forEach(p => p.classList.toggle("on", p.dataset.pane === k));
 }
-showTab("trace");
+showTab("client");
 
 async function renderLedger() {
   const j = await api("GET", `/customers/${cust()}/ledger`);
@@ -416,23 +417,31 @@ async function renderEvents() {
     el("pre", {}, JSON.stringify(e.payload, null, 1))));
 }
 
+let clientLoaded = false;
 async function refreshAll() {
-  await Promise.allSettled([renderLedger(), renderOps(), renderCost(), renderAudit(), renderEvents()]);
+  await Promise.allSettled([renderLedger(), renderOps(), renderCost(), renderAudit(), renderEvents(), clientLoaded ? null : renderClient().then(() => clientLoaded = true)]);
 }
 async function act(fn) { try { await fn(); } catch (e) { alert(e.message || e); } await refreshAll(); }
 
 // ------------------------------------------------------------------ CRM desktop
 function renderScreenPop(out) {
+  window._lastReason = out.screen_pop?.why_calling?.reason_code || null;
   const box = $("#crm-body"); box.replaceChildren();
   const a = out.contact_attributes, p = out.screen_pop;
   $("#crm-sub").textContent = `contact ${out.contact_id}`;
   const attrs = el("div", {class:"full"}, el("div", {class:"section-t"}, "Contact attributes returned to the contact flow (no PII)"), el("pre", {}, JSON.stringify(a)));
-  if (!p) { box.append(el("div", {class:"body"}, attrs, el("div", {class:"full"}, badge("unverified", "warn"), " routed to identity verification"))); return; }
+  if (!p) { box.append(el("div", {class:"body"}, attrs, el("div", {class:"full"}, badge("unverified", "warn"), " routed to identity verification",
+    out.risk ? el("pre", {}, JSON.stringify(out.risk)) : null))); return; }
   box.append(el("div", {class:"body"},
     el("div", {}, el("div", {class:"section-t"}, "Customer"), el("div", {}, el("b", {}, p.customer), ` · ${p.segment} · since ${p.customer_since}`),
       el("div", {class:"row"}, badge(a.route_queue, "info"), badge("priority " + a.priority), badge(p.identity.assurance, p.identity.assurance === "HIGH" ? "ok" : "info"))),
     el("div", {}, el("div", {class:"section-t"}, "Open issues (from SOR)"), p.open_issues.length ? el("ul", {class:"tight"}, p.open_issues.map(i => el("li", {}, el("b", {}, i.ref), ` ${i.type}: ${i.status} · ${i.detail}`))) : el("div", {class:"note"}, "none")),
-    el("div", {class:"full"}, el("div", {class:"section-t"}, "Next best actions"), el("ul", {class:"tight"}, p.next_best_actions.map(n => el("li", {}, n)))),
+    p.why_calling ? el("div", {class:"full"}, el("div", {class:"section-t"}, "Why the customer is calling (from the app, via handoff token)"),
+      el("div", {}, badge(p.why_calling.reason_code, "info"), " ", p.why_calling.summary),
+      el("div", {class:"row"}, badge("auth carried over · no re-verification", "ok"), out.risk ? badge(`risk ${out.risk.risk_score} → ${out.risk.decision}`) : null, p.routing ? badge(`proficiency route: ${p.routing.queue} · ~${p.routing.est_wait_s}s`, "info") : null),
+      el("div", {}, el("b", {}, "Greeting: "), "“" + p.agent_greeting + "”")) : null,
+    el("div", {class:"full"}, el("div", {class:"section-t"}, p.why_calling ? "Predicted suggested actions" : "Next best actions"), el("ul", {class:"tight"}, p.next_best_actions.map(n => el("li", {}, n)))),
+    p.knowledge ? el("div", {class:"full"}, el("div", {class:"section-t"}, "Relevant content"), el("ul", {class:"tight"}, p.knowledge.map(k => el("li", {}, el("b", {}, k.kb_id + " " + k.title + ": "), k.summary)))) : null,
     el("div", {class:"full"}, el("div", {class:"section-t"}, "Memory highlights (with provenance)"), p.memory_highlights.map(memLine)),
     p.recent_activity_other_channels.length ? el("div", {class:"full"}, el("div", {class:"section-t"}, "Recent activity on other channels"), el("ul", {class:"tight"}, p.recent_activity_other_channels.map(t => el("li", {}, `[${t.channel}] ${t.customer || ""} ${t.agent}`)))) : null,
     attrs,
@@ -442,13 +451,67 @@ function wrapUpForm(contactId) {
   const notes = el("input", {value:"Customer asked for a paper copy of the dispute letter. Prefers email follow-up.", style:"flex:1"});
   const disp = el("select", {}, ...["Resolved - info given","Follow-up required","Transferred"].map(d => el("option", {}, d)));
   const f = el("form", {class:"row full"}, el("b", {}, "Wrap-up:"), disp, notes, el("button", {class:"primary"}, "Log to CRM"));
-  f.addEventListener("submit", async e => { e.preventDefault(); const r = await api("POST", `/connect/contact/${contactId}/wrap-up`, {disposition: disp.value, notes: notes.value, agent_id:"agent-007"});
+  f.addEventListener("submit", async e => { e.preventDefault(); const r = await api("POST", `/connect/contact/${contactId}/wrap-up`, {disposition: disp.value, notes: notes.value, agent_id:"agent-007", fulfilment: window._lastReason === "FEE_WAIVER" ? {action:"FEE_WAIVER"} : null});
     f.replaceWith(el("div", {class:"full"}, badge("CRM activity " + r.crm_activity.activity_id, "ok"), ` ${r.crm_activity.taxonomy_code} · memory ${r.memory.status} (${r.memory.memory_id || r.memory.reason})`)); refreshAll(); });
   return f;
 }
 async function connectContact(address, intent, channel="VOICE") {
   const out = await api("POST", "/connect/contact", {ContactId: "ct-" + Math.random().toString(36).slice(2,8), Channel: channel, CustomerEndpoint: {Address: address, Type: "TELEPHONE_NUMBER"}, Attributes: {intent}});
   renderScreenPop(out); refreshAll(); return out;
+}
+
+// ------------------------------------------------------------------ digital assistant (dialog manager + LLM fallback)
+function dBubble(j) {
+  const meta = [badge("digital assistant", "info")];
+  if (j.insight) meta.push(badge(`predicted: ${j.insight.predicted_intent} (${j.insight.confidence})`, "info"));
+  if (j.intent && j.intent !== "WELCOME") meta.push(badge(j.intent));
+  if (j.payment) meta.push(badge("payment " + j.payment.ref, "ok"));
+  if (j.waiver) meta.push(badge("waived " + j.waiver.ref, "ok"));
+  if (j.handoff) meta.push(badge(`context stored → ${j.handoff.routing.queue}`, "warn"));
+  if (j.click_to_dial) meta.push(badge("click-to-dial " + j.click_to_dial.number, "warn"));
+  if (j.chat_transfer) meta.push(badge("chat transfer → " + j.chat_transfer.queue, "warn"));
+  if (j.updates?.length) meta.push(badge("fulfilment update shown", "ok"));
+  if (j.trace) meta.push(badge("LLM fallback"));
+  bubble("web_chat", "a", j.text, meta);
+}
+async function dStart(account, fresh) {
+  if (fresh) await api("POST", "/ops/servicing/reset");
+  $("#web_chat .id input").value = account; bubble("web_chat", "u", "[opens the in-app assistant]");
+  const j = await api("POST", "/digital/session", {account_id: account}); window._ds = j.session_id; dBubble(j); refreshAll(); return j;
+}
+async function dSay(text) {
+  bubble("web_chat", "u", text);
+  const j = await api("POST", "/digital/message", {session_id: window._ds, text}); dBubble(j);
+  if (j.trace) renderTrace(j, "web_chat");
+  refreshAll(); return j;
+}
+async function pickup(channel, from) {
+  const token = (await api("GET", `/ops/digital-token/${window._ds}`)).handoff_token;
+  const out = await api("POST", "/connect/contact", {ContactId: "ct-" + Math.random().toString(36).slice(2,8), Channel: channel,
+    CustomerEndpoint: {Address: from || ""}, Attributes: {handoff_token: token}});
+  renderScreenPop(out);
+  const pane = channel === "VOICE" ? "voice" : "web_chat";
+  if (out.screen_pop) bubble(pane, "a", out.screen_pop.agent_greeting, [badge("specialist · " + out.contact_attributes.route_queue, "ok"), badge("no re-authentication", "ok")]);
+  else bubble(pane, "a guard", `Contact not verified: ${out.contact_attributes.reason}`, [badge("identity verification", "warn")]);
+  window._contact = out.contact_id; refreshAll(); return out;
+}
+async function renderClient() {
+  const j = await api("GET", "/ops/client-use-cases");
+  const box = $("#client"); box.replaceChildren();
+  box.append(el("p", {class:"note"}, "Client-expected journeys and the synthetic test data behind them (eval/client_use_cases.json). Each step has an expected result; the run checks all of them on a fresh offline gateway."));
+  const res = el("div");
+  box.append(el("div", {class:"row"}, el("button", {class:"primary", onclick: async e => { e.target.disabled = true; try { res.replaceChildren(clientResults(await api("POST", "/ops/client-use-cases/run"))); } finally { e.target.disabled = false; } }}, "Run all client test cases")), res);
+  for (const uc of j.use_cases) box.append(el("div", {class:"mem"}, el("div", {class:"t"}, el("b", {}, uc.id + " "), uc.title),
+    el("div", {class:"m"}, `customer ${uc.customer} · account ${uc.account_id}${uc.phone ? " · phone " + uc.phone : ""}`),
+    el("div", {class:"m"}, "Test data: " + uc.test_data),
+    el("table", {}, el("tbody", {}, uc.steps.map((st, i) => el("tr", {}, el("td", {class:"n"}, i+1), el("td", {}, st.do + (st.text ? `: “${st.text}”` : st.channel ? ` (${st.channel}${st.from ? " from " + st.from : ""})` : "")),
+      el("td", {}, Object.entries(st.expect || {}).map(([k,v]) => `${k} = ${JSON.stringify(v)}`).join("; ") || "-")))))));
+}
+function clientResults(r) {
+  let ok = 0, n = 0; for (const u of r.results) for (const s of u.steps) { n++; ok += s.ok; }
+  return el("div", {}, el("p", {}, badge(`${ok}/${n} steps passed`, ok === n ? "ok" : "bad")),
+    r.results.map(u => el("div", {class:"mem"}, el("div", {class:"t"}, el("b", {}, u.id + " "), u.steps.every(s => s.ok) ? badge("PASS", "ok") : badge("FAIL", "bad")),
+      el("table", {}, el("tbody", {}, u.steps.map(s => el("tr", {}, el("td", {class:"n"}, s.step), el("td", {}, s.ok ? "✓" : "✗"), el("td", {}, s.do + (s.input ? `: “${s.input}”` : "")), el("td", {}, s.errors.length ? s.errors.join("; ") : String(s.reply).slice(0, 140)))))))));
 }
 
 // ------------------------------------------------------------------ scenarios
@@ -575,6 +638,59 @@ const SC = [
       ["Back to salient; open Cost & quotas", async () => { await api("POST", "/ops/extraction-policy", {mode:"salient", batch_turns:6}); showTab("cost"); refreshAll(); return "per-partition meters and live token buckets"; }],
       ["Burst: 300 contacts under each policy", async () => { showTab("cost"); const t = await burstCompare(); $("#cost").append(el("div", {class:"section-t"}, "Scenario burst result"), t); return "see the table at the bottom of Cost & quotas"; }],
       ["Capacity plan: 2M contacts/month", async () => { const c = await api("GET", "/ops/capacity?contacts_per_month=2000000&mode=salient"); $("#cost").append(el("div", {class:"section-t"}, "Scenario capacity plan"), capTable(c)); return `${c.monthly.extraction_calls.toLocaleString()} extractions/month · $${c.cost_usd.total_with_storage_usd.toLocaleString()} (illustrative) · peak ${c.throughput.peak_extract_qpm} QPM`; }],
+    ]},
+  { title: "Client journey: predicted fee waiver + offer", tag: "predictive intent → digital fulfilment → live chat specialist",
+    why: "The recommendation engine predicts why the customer is here. The assistant confirms, waives a deposit-account fee within its authority, then offers the next-best action and transfers to a sales specialist in chat with the full context.",
+    legacy: "Customer has to explain the need; offers are disconnected from the servicing moment.",
+    prod: "Recommendation engine API for predicted intent and personalization; dialog manager for known intents; LLM for the rest.",
+    customer: "CUST-1004",
+    steps: [
+      ["Arjun opens the in-app assistant: predicted intent", () => dStart("ACC-77310077", true)],
+      ["Yes", () => dSay("Yes")],
+      ["Savings account → one-time courtesy waiver", () => dSay("Savings account")],
+      ["Nothing else → next-best offer", () => dSay("No")],
+      ["Yes → context stored, skilled queue found", () => dSay("Yes")],
+      ["Chat here → transfer with handoff token", () => dSay("Chat here please")],
+      ["Sales specialist picks up the chat with full context", async () => { const o = await pickup("CHAT"); return o.screen_pop?.agent_greeting; }],
+    ]},
+  { title: "Client journey: unrecognized charge → live chat", tag: "no prediction → NLU → agent with context",
+    why: "No predicted intent, so the assistant asks. NLU recognises an unrecognized-charge intent, lists the July statement, and when the customer asks for an agent the chat transfers with auth, intent and interaction data. The agent greets with the reason and never re-authenticates.",
+    legacy: "Transfer to an agent drops the context; the customer re-authenticates and repeats the story.",
+    prod: "Chat transfer carries the handoff token as a contact attribute; agent desktop redeems it.",
+    customer: "CUST-1002",
+    steps: [
+      ["Daniel opens the assistant: no prediction", () => dStart("ACC-55102988", true)],
+      ["Unrecognized charge on the July statement", () => dSay("I am contacting about a charge that I don't recognize on my July statement")],
+      ["Customer opts out to an agent", () => dSay("I'd like to talk to an agent")],
+      ["Fraud & disputes agent picks up with context", async () => { const o = await pickup("CHAT"); return o.screen_pop?.agent_greeting; }],
+    ]},
+  { title: "Client journey: digital → voice (click-to-dial)", tag: "omnichannel context passing, IVR routing",
+    why: "Same need, but the customer chooses to call. The assistant updates the context store and offers click-to-dial with the token; the IVR fetches the context, runs the risk check (phone on file, fresh token, low-risk intent), routes to the skilled queue, and the agent starts with the reason.",
+    legacy: "Calls after a digital session start from zero: identification, authentication, intent capture.",
+    prod: "Click-to-dial passes the token (DNIS or contact attribute); IVR/routing Lambda redeems it.",
+    customer: "CUST-1002",
+    steps: [
+      ["Daniel opens the assistant", () => dStart("ACC-55102988", true)],
+      ["Unrecognized charge on the July statement", () => dSay("I am contacting about a charge that I don't recognize on my July statement")],
+      ["Customer would rather call", () => dSay("Can I call someone about this?")],
+      ["IVR fetches context, routes, agent greets", async () => { const o = await pickup("VOICE", "+1 (646) 555-0177"); return `${o.risk.decision} (risk ${o.risk.risk_score}) → ${o.contact_attributes.route_queue}: “${o.screen_pop.agent_greeting}”`; }],
+      ["Replay the same token: refused", async () => { const o = await pickup("VOICE", "+1 (646) 555-0177"); return `contact attributes: ${o.contact_attributes.reason}`; }],
+    ]},
+  { title: "Client journey: known-intent fulfilment", tag: "payment → fees → waiver escalated to voice → outcome back in app",
+    why: "The full use case: predicted payment due in 2 days, paid in the app; fee inquiry via transaction search; the late-fee waiver is outside digital authority, so the assistant checks specialist availability, stores context, and escalates to voice. Auth carries over, proficiency routing picks the fees team, the specialist waives the fee, the context is updated, and the app shows the outcome when the customer returns.",
+    legacy: "Payment, inquiry and waiver are three separate contacts; the app never learns what the phone agent did.",
+    prod: "Context store with token API; agent engagement platform updates fulfilment status; app reads it on the next session.",
+    customer: "CUST-1001",
+    steps: [
+      ["Maya opens the assistant: payment due in 2 days", () => dStart("ACC-77310042", true)],
+      ["Yes, pay it", () => dSay("Yes")],
+      ["Confirm the payment", () => dSay("Yes")],
+      ["What fees were charged on my card?", () => dSay("What fees were charged on my card?")],
+      ["Waive the fee from October 15 → needs a specialist", () => dSay("Can you help to waive off the fee charged on October 15?")],
+      ["Call now (click-to-dial with token)", () => dSay("Call now")],
+      ["Fees specialist picks up: no re-auth, knows why", async () => { const o = await pickup("VOICE", "+1 (212) 555-0142"); return `${o.risk.decision} → ${o.contact_attributes.route_queue}: “${o.screen_pop.agent_greeting}”`; }],
+      ["Specialist waives the fee and wraps up", async () => { const r = await api("POST", `/connect/contact/${window._contact}/wrap-up`, {disposition:"Resolved - fee waived", notes:"Courtesy waiver of the October late fee applied.", agent_id:"specialist-12", fulfilment:{action:"FEE_WAIVER"}}); refreshAll(); return r.crm_activity.fulfilment.message; }],
+      ["Maya returns to the app: outcome shown", () => dStart("ACC-77310042")],
     ]},
 ];
 
