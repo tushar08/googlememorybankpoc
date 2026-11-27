@@ -77,7 +77,7 @@ pip install -r requirements.txt
 
 # 0. Offline: no GCP needed
 pytest -q                                   # 48 passed
-FAKE_MODEL=1 BACKEND=local uvicorn cx_memory.api:app --port 8080   # open http://localhost:8080, pick a scenario, Run
+FAKE_MODEL=1 BACKEND=local uvicorn cx_memory.api:app --port 8080   # business view at http://localhost:8080, technical console at /console
 
 # 1. GCP setup (once)
 cp .env.example .env                         # fill in GOOGLE_CLOUD_PROJECT
@@ -89,8 +89,9 @@ python scripts/verify_env.py                 # every check must PASS
 # 2. Load the source-system data into Memory Bank
 python scripts/ingest_profiles.py --reset
 
-# 3. Run the live demo console
-uvicorn cx_memory.api:app --port 8080        # http://localhost:8080
+# 3. Run the live demo console (SEED_ON_START=1 wipes and re-seeds the synthetic customers so
+#    lifecycle features such as SOR supersession work after every restart; it replaces step 2)
+SEED_ON_START=1 uvicorn cx_memory.api:app --port 8080        # http://localhost:8080 (business view), /console (technical)
 
 # 4. Evaluation
 python eval/run_storyline.py --runs 3        # 7 metrics x 3 runs -> eval/results/*.json

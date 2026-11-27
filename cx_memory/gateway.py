@@ -130,6 +130,14 @@ class OmnichannelGateway:
         for cid in all_customer_ids():
             await self.seed_customer(cid)
 
+    async def reseed_vertex(self) -> None:
+        """Delete each synthetic customer's memories in Memory Bank, then seed them again."""
+        for cid in all_customer_ids():
+            part, token = self.scope(cid)
+            purged = await self.memory_service.inner.purge_scope(part.app_name, token)
+            n = await self.seed_customer(cid)
+            print(f"reseed {cid}: deleted {purged}, wrote {n}", flush=True)
+
     async def _create_session(self, info: SessionInfo):
         profile = load_profile(info.customer_id)
         s = await self.session_service.create_session(

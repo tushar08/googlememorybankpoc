@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unified Customer Memory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Business view: story list on the left; on the right a narration card above two screens
+   (what the customer sees, what the specialist or the bank sees). One step per click. */
+:root{
+  --bg:#f3f5f8; --card:#ffffff; --ink:#14202e; --muted:#5d6b7c; --line:#e1e6ee;
+  --brand:#1a4fd6; --brand-soft:#e8eefc; --ok:#13795b; --ok-soft:#e3f4ed; --warn:#a35a00; --warn-soft:#fdf0dc;
+  --bad:#b42318; --bad-soft:#fde8e6; --phone:#0f1824;
+  --display:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--body)}
+button{font:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+
+/* header */
+header{display:flex;align-items:center;gap:24px;padding:12px 28px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{font:800 18px/1 var(--display);letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+.brand i{width:26px;height:26px;border-radius:8px;background:var(--brand);display:inline-grid;place-items:center;color:#fff;font:800 13px var(--display);font-style:normal}
+nav{display:flex;gap:4px}
+nav button,nav a{border:0;background:none;padding:8px 14px;border-radius:8px;color:var(--muted);font-weight:600;text-decoration:none;font-size:14px}
+nav button.on{background:var(--brand-soft);color:var(--brand)}
+nav a:hover,nav button:hover{color:var(--ink)}
+.sp{flex:1}
+.pill{font-size:12px;font-weight:600;padding:5px 10px;border-radius:999px;background:var(--bg);color:var(--muted)}
+.pill.live{background:var(--ok-soft);color:var(--ok)}
+.ghost{border:1px solid var(--line);background:var(--card);padding:7px 12px;border-radius:8px;font-size:13px;font-weight:600;color:var(--muted)}
+
+/* layout */
+.layout{display:grid;grid-template-columns:290px minmax(0,1fr);gap:24px;padding:24px 28px;max-width:1500px;margin:0 auto}
+aside{display:grid;gap:10px;align-content:start}
+aside h3{margin:4px 0 2px;font:700 12px/1 var(--display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.story{all:unset;cursor:pointer;display:grid;gap:4px;padding:14px 16px;border-radius:12px;background:var(--card);border:1px solid var(--line)}
+.story b{font:700 15px/1.3 var(--display)}
+.story span{font-size:13px;color:var(--muted)}
+.story.on{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.story:focus-visible{outline:3px solid var(--brand)}
+.stage{display:grid;gap:18px;min-width:0;align-content:start}
+
+/* narration */
+.narr{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 24px;display:grid;gap:10px}
+.narr-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.who{font-size:13px;font-weight:600;color:var(--muted)}
+.dots{display:flex;gap:6px;margin-left:auto}
+.dots i{width:22px;height:5px;border-radius:3px;background:var(--line)}
+.dots i.done{background:var(--brand)}
+.dots i.now{background:var(--brand);opacity:.45}
+.narr h1{margin:0;font:800 26px/1.2 var(--display);letter-spacing:-.015em;text-wrap:balance}
+.narr .why{margin:0;color:var(--muted);font-size:16px;max-width:75ch}
+.why b{color:var(--ok);font-weight:600}
+.ctrl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.primary{border:0;background:var(--brand);color:#fff;font-weight:700;padding:11px 20px;border-radius:10px;font-size:15px}
+.primary:disabled{opacity:.5;cursor:default}
+.hint{font-size:12px;color:var(--muted)}
+
+/* screens */
+.screens{display:grid;grid-template-columns:380px minmax(0,1fr);gap:18px;align-items:start}
+.screens>*{min-width:0}
+.label{font:700 12px/1 var(--display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 8px 4px}
+.phone{background:var(--phone);border-radius:36px;padding:12px}
+.phone-in{background:#f7f8fb;border-radius:26px;height:560px;display:flex;flex-direction:column;overflow:hidden}
+.ph-head{padding:16px 18px 12px;background:var(--card);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.ph-head .av{width:34px;height:34px;border-radius:50%;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;font-weight:800;font-family:var(--display)}
+.ph-head b{display:block;font:700 14px/1.2 var(--display)}
+.ph-head small{color:var(--muted);font-size:12px}
+.feed{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:86%;padding:10px 13px;border-radius:16px;font-size:14px;line-height:1.45;animation:in .25s ease-out}
+.msg.customer{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px}
+.msg.assistant{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:4px}
+.msg.specialist{align-self:flex-start;background:var(--ok-soft);border-bottom-left-radius:4px}
+.msg.system{align-self:center;background:none;color:var(--muted);font-size:12px;text-align:center;max-width:95%;padding:2px 8px}
+.msg .from{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:2px}
+.msg.specialist .from{color:var(--ok)}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.chip{font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--brand-soft);color:var(--brand)}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.empty{color:var(--muted);font-size:14px;text-align:center;margin:auto;padding:20px;max-width:30ch}
+@keyframes in{from{opacity:.2;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.msg,.note{animation:none}}
+
+/* specialist / bank view */
+.desk{background:var(--card);border:1px solid var(--line);border-radius:16px;min-height:584px;display:flex;flex-direction:column;overflow:hidden}
+.desk-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.desk-head b{font:800 18px/1.2 var(--display)}
+.desk-head small{color:var(--muted)}
+.desk-body{padding:18px 20px;display:grid;gap:18px;align-content:start}
+.sec h4{margin:0 0 6px;font:700 12px/1 var(--display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.sec p{margin:0}
+.sec ul{margin:0;padding-left:18px;display:grid;gap:4px}
+.reason{font:700 20px/1.3 var(--display)}
+.greet{background:var(--ok-soft);border-radius:12px;padding:12px 14px;font-size:15px}
+.notes{display:grid;gap:10px}
+.note{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;align-items:start;animation:in .25s ease-out}
+.note i{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:800;background:var(--brand-soft);color:var(--brand)}
+.note.ok i{background:var(--ok-soft);color:var(--ok)}
+.note.warn i{background:var(--warn-soft);color:var(--warn)}
+.note.bad i{background:var(--bad-soft);color:var(--bad)}
+
+/* outcome */
+.outcome{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 24px;display:grid;gap:12px}
+.outcome h4{margin:0;font:700 12px/1 var(--display);text-transform:uppercase;letter-spacing:.08em;color:var(--ok)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{border-radius:12px;background:var(--ok-soft);padding:12px 14px}
+.kpi b{display:block;font:800 22px/1.15 var(--display);color:var(--ok)}
+.kpi span{font-size:13px;color:var(--ink)}
+.err{background:var(--bad-soft);color:var(--bad);border-radius:10px;padding:10px 14px;font-size:14px}
+
+@media (max-width:1100px){.screens{grid-template-columns:1fr}.phone{max-width:400px}}
+@media (max-width:800px){.layout{grid-template-columns:1fr;padding:16px}header{padding:12px 16px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><i>M</i>Unified Customer Memory</div>
+  <nav>
+    <button data-group="journeys" class="on">Customer journeys</button>
+    <button data-group="trust">Trust &amp; safety</button>
+    <a href="/console" title="Technical console: traces, memory records, audit, cost, resilience">Under the hood ↗</a>
+  </nav>
+  <span class="sp"></span>
+  <span class="pill" id="mode">…</span>
+  <button class="ghost" id="reset" title="Start every story from a clean state">Reset demo</button>
+</header>
+
+<div class="layout">
+  <aside id="list"></aside>
+  <main class="stage">
+    <section class="narr" aria-live="polite">
+      <div class="narr-top"><span class="who" id="who"></span><div class="dots" id="dots"></div></div>
+      <h1 id="title">Pick a story</h1>
+      <p class="why" id="why"></p>
+      <div class="ctrl">
+        <button class="primary" id="next">Start</button>
+        <button class="ghost" id="restart">Restart story</button>
+        <span class="hint">Tip: press → or Space for the next step</span>
+      </div>
+      <div class="err" id="err" hidden></div>
+    </section>
+
+    <div class="screens">
+      <div>
+        <p class="label" id="cust-label">What the customer sees</p>
+        <div class="phone"><div class="phone-in">
+          <div class="ph-head"><div class="av" id="ph-av">B</div><div><b id="ph-title">Bank app</b><small id="ph-sub">Assistant</small></div></div>
+          <div class="feed" id="feed"><div class="empty">The customer's screen appears here.</div></div>
+        </div></div>
+      </div>
+      <div>
+        <p class="label" id="right-label">What the specialist sees</p>
+        <div class="desk" id="desk"></div>
+      </div>
+    </div>
+
+    <section class="outcome" id="outcome" hidden>
+      <h4>Outcome</h4>
+      <div class="kpis" id="kpis"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) k === "class" ? e.className = v : e.setAttribute(k, v);
+  for (const k of kids.flat()) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return e;
+}
+async function api(method, url, body) {
+  const r = await fetch(url, {method, headers: {"content-type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail ? (typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail)) : r.statusText);
+  return j;
+}
+const pretty = c => (c || "").toLowerCase().replace(/_/g, " ").replace(/^\w/, m => m.toUpperCase());
+const facts = n => n === 1 ? "1 fact" : `${n} facts`;
+const chip = (t, cls = "") => el("span", {class: "chip " + cls}, t);
+
+// ------------------------------------------------------------ customer screen
+function setPhone(kind, title) {
+  const map = {app: ["Bank app", "Digital assistant", "B"], chat: ["Bank app", "Live chat", "B"], call: ["Phone call", "", "☎"], email: ["Email", "", "✉"]};
+  const [t, sub, av] = map[kind];
+  $("#ph-title").textContent = title || t; $("#ph-sub").textContent = sub; $("#ph-av").textContent = av;
+}
+function msg(who, text, chips = []) {
+  const feed = $("#feed"); feed.querySelector(".empty")?.remove();
+  const from = {assistant: "Assistant", specialist: "Specialist", customer: null, system: null}[who];
+  const d = el("div", {class: "msg " + who}, from ? el("span", {class: "from"}, from) : null, text);
+  if (chips.length) d.append(el("div", {class: "chips"}, chips));
+  feed.append(d); feed.scrollTop = feed.scrollHeight;
+}
+
+// ------------------------------------------------------------ right panel
+function deskWaiting(text) {
+  $("#desk").replaceChildren(el("div", {class: "empty"}, text));
+}
+function deskSpecialist(out) {
+  const p = out.screen_pop, risk = out.risk || {};
+  if (!p) {
+    $("#desk").replaceChildren(el("div", {class: "desk-head"}, el("b", {}, "Contact not verified"), chip("Security check required", "warn")),
+      el("div", {class: "desk-body"}, el("div", {class: "sec"}, el("p", {}, "This link was already used. No customer details are shown. The caller is sent to identity verification."))));
+    return;
+  }
+  const verified = risk.decision === "auto_authenticated";
+  $("#desk").replaceChildren(
+    el("div", {class: "desk-head"}, el("div", {}, el("b", {}, p.customer), el("br"), el("small", {}, `${p.segment} · customer since ${p.customer_since}`)),
+      el("span", {class: "sp"}),
+      verified ? chip("Verified · no security questions", "ok") : chip("Extra verification needed", "warn"),
+      chip("Team: " + (p.routing?.queue || out.contact_attributes.route_queue).replace(/-/g, " "))),
+    el("div", {class: "desk-body"},
+      p.why_calling ? el("div", {class: "sec"}, el("h4", {}, "Why the customer is calling"), el("p", {class: "reason"}, pretty(p.why_calling.reason_code)), el("p", {}, p.why_calling.summary)) : null,
+      el("div", {class: "sec"}, el("h4", {}, "Already done and suggested next steps"), el("ul", {}, p.next_best_actions.map(n => el("li", {}, n)))),
+      p.knowledge?.length ? el("div", {class: "sec"}, el("h4", {}, "Helpful articles"), el("ul", {}, p.knowledge.map(k => el("li", {}, k.title)))) : null,
+      p.open_issues?.length ? el("div", {class: "sec"}, el("h4", {}, "Open cases"), el("ul", {}, p.open_issues.map(i => el("li", {}, `${i.type}: ${i.status}`)))) : null,
+      el("div", {class: "sec"}, el("h4", {}, "Suggested greeting"), el("div", {class: "greet"}, "“" + p.agent_greeting + "”")),
+      el("div", {class: "sec", id: "desk-log"})));
+}
+function deskLog(text) {
+  const box = $("#desk-log"); if (!box) return;
+  if (!box.firstChild) box.append(el("h4", {}, "Logged to CRM"));
+  box.append(el("p", {}, text));
+}
+function bankStart(text) {
+  $("#desk").replaceChildren(el("div", {class: "desk-head"}, el("b", {}, "What the bank sees")),
+    el("div", {class: "desk-body"}, el("div", {class: "notes", id: "notes"}, el("div", {class: "empty", id: "notes-empty"}, text))));
+}
+function note(text, kind = "info") {
+  $("#notes-empty")?.remove();
+  const icon = {ok: "✓", warn: "!", bad: "×", info: "i"}[kind];
+  $("#notes").append(el("div", {class: "note " + kind}, el("i", {}, icon), el("div", {}, text)));
+}
+
+// ------------------------------------------------------------ backend helpers
+const S = {};          // per-story state
+async function appOpen(account, fresh) {
+  if (fresh) await api("POST", "/ops/servicing/reset");
+  setPhone("app"); msg("system", "Opens the bank app");
+  const j = await api("POST", "/digital/session", {account_id: account}); S.ds = j.session_id; assistant(j); return j;
+}
+async function appSay(text) {
+  msg("customer", text);
+  const j = await api("POST", "/digital/message", {session_id: S.ds, text}); assistant(j); return j;
+}
+function assistant(j) {
+  const c = [];
+  if (j.insight) c.push(chip("Anticipated: " + pretty(j.insight.predicted_intent)));
+  if (j.payment) c.push(chip("Payment made", "ok"));
+  if (j.waiver) c.push(chip("Fee waived", "ok"));
+  if (j.handoff) c.push(chip("Context saved for the specialist", "warn"));
+  if (j.click_to_dial) c.push(chip("Call button carries the context", "warn"));
+  if (j.chat_transfer) c.push(chip("Chat transfer carries the context", "warn"));
+  if (j.updates?.length) c.push(chip("Update from the specialist", "ok"));
+  msg("assistant", j.text, c);
+}
+async function specialistPicksUp(channel, from) {
+  const token = (await api("GET", `/ops/digital-token/${S.ds}`)).handoff_token;
+  const out = await api("POST", "/connect/contact", {ContactId: "ct-" + Math.random().toString(36).slice(2, 8), Channel: channel,
+    CustomerEndpoint: {Address: from || ""}, Attributes: {handoff_token: token}});
+  S.contact = out.contact_id;
+  if (channel === "VOICE") setPhone("call", "Call with a specialist"); else setPhone("chat");
+  if (out.screen_pop) {
+    msg("specialist", out.screen_pop.agent_greeting, [chip("No security questions", "ok"), chip("Right team first time", "ok")]);
+  } else {
+    msg("system", "This link was already used, so it can't be used again. The caller must verify their identity.", [chip("Reuse blocked", "bad")]);
+  }
+  deskSpecialist(out); return out;
+}
+async function channelSay(channel, identifier, text) {
+  const route = {voice: ["/channels/voice", {caller_number: identifier, transcript: text}],
+                 web_chat: ["/channels/web-chat", {account_id: identifier, message: text}],
+                 email: ["/channels/email", {sender: identifier, subject: "", body: text}]}[channel];
+  const key = channel + "|" + identifier;
+  msg("customer", text);
+  const j = await api("POST", route[0], {...route[1], session_id: S.sessions?.[key] || null});
+  (S.sessions ||= {})[key] = j.session_id;
+  const c = [];
+  const used = j.trace?.memories_used?.length || 0;
+  if (j.step_up) c.push(chip("Verification needed", "warn"));
+  else if (used) c.push(chip(`Remembered ${facts(used)}`));
+  if (j.trace?.degraded?.length) c.push(chip("Memory offline, still answered", "warn"));
+  msg("assistant", j.text, c); return j;
+}
+
+// ------------------------------------------------------------ stories
+const MAYA_APP = "ACC-77310042", MAYA_PHONE = "+1 (212) 555-0142", MAYA_EMAIL = "maya.patel@example.com";
+const STORIES = [
+  { group: "journeys", title: "Pay, ask, and get a fee waived", who: "Maya · Private client · app → phone",
+    blurb: "One need, two channels, one contact. The outcome comes back to the app.",
+    right: "specialist", waiting: "The specialist's screen fills in when Maya's call arrives.",
+    kpis: [["1 contact", "instead of 3 separate ones"], ["0", "security questions on the call"], ["0", "times Maya repeats herself"], ["Closed loop", "the app shows what the specialist did"]],
+    steps: [
+      ["Maya opens the bank app", "Her card payment is due in 2 days. <b>The assistant offers to pay it before she asks.</b>", () => appOpen(MAYA_APP, true)],
+      ["She says yes", "Everyday requests run on the bank's own rules and data, so <b>amounts are exact</b>.", () => appSay("Yes")],
+      ["She confirms the payment", "<b>Done in the app</b>, no agent needed.", () => appSay("Yes")],
+      ["She asks which fees were charged", "The assistant looks up her card transactions directly.", () => appSay("What fees were charged on my card?")],
+      ["She asks to waive the October 15 fee", "Late-fee waivers need a specialist. <b>The assistant checks one is free and saves the conversation so far.</b>", () => appSay("Can you help to waive off the fee charged on October 15?")],
+      ["She taps Call now", "The call carries a one-time link to her context.", () => appSay("Call now")],
+      ["A fees specialist answers", "<b>No security questions.</b> The specialist already knows why she is calling and what she already did in the app.", () => specialistPicksUp("VOICE", MAYA_PHONE)],
+      ["The specialist waives the fee and closes the call", "The outcome is logged to the CRM and sent back to the app.", async () => {
+        const r = await api("POST", `/connect/contact/${S.contact}/wrap-up`, {disposition: "Resolved - fee waived", notes: "Courtesy waiver of the October late fee applied.", agent_id: "specialist-12", fulfilment: {action: "FEE_WAIVER"}});
+        msg("specialist", "All done, I've waived the October late fee. Anything else?"); msg("system", "Call ended");
+        deskLog("Resolved: fee waived. " + (r.crm_activity?.fulfilment?.message || ""));
+      }],
+      ["Later, Maya opens the app again", "<b>The app shows what the specialist did.</b> No follow-up call needed.", async () => { $("#feed").replaceChildren(); await appOpen(MAYA_APP, false); }],
+    ]},
+  { group: "journeys", title: "Unrecognized charge, app to live chat", who: "Daniel · Retail · app → live chat",
+    blurb: "The agent picks up the chat already knowing the problem.",
+    right: "specialist", waiting: "The agent's screen fills in when the chat is transferred.",
+    kpis: [["0", "security questions in the chat"], ["Right team", "fraud & disputes, first time"], ["0", "times Daniel repeats the problem"]],
+    steps: [
+      ["Daniel opens the bank app", "Nothing predicted this time, so the assistant asks how it can help.", () => appOpen("ACC-55102988", true)],
+      ["He reports a charge he doesn't recognize", "The assistant understands the request and finds his July statement.", () => appSay("I am contacting about a charge that I don't recognize on my July statement")],
+      ["He asks for a person", "<b>Customer's choice.</b> The chat is transferred with everything gathered so far.", () => appSay("I'd like to talk to an agent")],
+      ["A disputes agent picks up the chat", "<b>The agent greets him with the reason</b> and never asks him to verify again.", () => specialistPicksUp("CHAT")],
+    ]},
+  { group: "journeys", title: "Unrecognized charge, app to phone", who: "Daniel · Retail · app → phone",
+    blurb: "The context follows him onto a phone call, and the link can't be reused.",
+    right: "specialist", waiting: "The agent's screen fills in when the call arrives.",
+    kpis: [["Context", "follows the customer to the phone"], ["Automatic", "risk check, no security questions"], ["Blocked", "reuse of the one-time link"]],
+    steps: [
+      ["Daniel opens the bank app", "The assistant asks how it can help.", () => appOpen("ACC-55102988", true)],
+      ["He reports a charge he doesn't recognize", "The assistant finds his July statement.", () => appSay("I am contacting about a charge that I don't recognize on my July statement")],
+      ["He would rather call", "<b>Customer's choice.</b> The call button carries his context.", () => appSay("Can I call someone about this?")],
+      ["The phone system routes him to an agent", "A quick risk check passes: known phone, fresh link, low-risk request. <b>The agent starts with the reason.</b>", () => specialistPicksUp("VOICE", "+1 (646) 555-0177")],
+      ["Someone tries to reuse the same link", "<b>Refused.</b> Each link works once and expires after 15 minutes.", () => specialistPicksUp("VOICE", "+1 (646) 555-0177")],
+    ]},
+  { group: "journeys", title: "Fee waived, then the right offer", who: "Arjun · Retail · app → live chat",
+    blurb: "Service turns into a sales conversation at the right moment.",
+    right: "specialist", waiting: "The sales specialist's screen fills in when the chat is transferred.",
+    kpis: [["No agent", "needed to waive the fee"], ["Right moment", "for a personalised offer"], ["Full context", "for the sales specialist"]],
+    steps: [
+      ["Arjun opens the bank app", "<b>The assistant guesses why he's here</b>: a fee waiver.", () => appOpen("ACC-77310077", true)],
+      ["He says yes", "The assistant asks which account.", () => appSay("Yes")],
+      ["Savings account", "Within its authority, <b>the assistant waives the fee itself</b>.", () => appSay("Savings account")],
+      ["Nothing else, he says", "<b>Next best offer</b>: he is pre-qualified for a travel rewards card.", () => appSay("No")],
+      ["He's interested", "The assistant finds an available sales specialist.", () => appSay("Yes")],
+      ["He chooses to chat", "The chat is transferred with the full context.", () => appSay("Chat here please")],
+      ["The sales specialist picks up", "<b>Starts with the offer</b>, already knowing the fee was waived.", () => specialistPicksUp("CHAT")],
+    ]},
+
+  { group: "trust", title: "Calls from a new phone", who: "Maya · calls from a number we don't know",
+    blurb: "No data until verified. Then the new number is remembered.",
+    right: "bank", waiting: "Each step shows what the bank's systems decide.",
+    kpis: [["0", "customer details shared before verifying"], ["Code to the phone on file", "never to the new number"], ["Blocked", "contact changes on a weaker check"]],
+    steps: [
+      ["Maya calls from a new number", "<b>The number isn't on file, so nothing is shared</b>: no account details, no history.", async () => {
+        setPhone("call", "Call from a new number"); bankStart("");
+        await channelSay("voice", "+1 (917) 555-0199", "Hi, it's Maya, I'm calling about my hotel dispute");
+        note("Number not on file: no account details shared, no memory read.", "warn"); }],
+      ["She enters her account number", "A one-time code goes to <b>the phone already on file</b>, not the phone she's calling from.", async () => {
+        S.ch = await api("POST", "/identity/step-up/start", {channel: "voice", identifier: "+1 (917) 555-0199", account_number: "ACC-7731-0042"});
+        msg("system", `One-time code sent to ${S.ch.delivered_to}`); note(`One-time code sent to the phone on file (${S.ch.delivered_to}).`); }],
+      ["She reads back the code", "Verified. <b>The new number is linked to Maya</b> and flagged as a new device for 30 days.", async () => {
+        const v = await api("POST", "/identity/step-up/verify", {challenge_id: S.ch.challenge_id, code: S.ch.demo_code});
+        (S.sessions ||= {})["voice|+1 (917) 555-0199"] = v.session_id;
+        msg("system", "Identity verified", [chip("Verified", "ok")]); note("Verified with a strong check. New number linked, flagged as a new device.", "ok"); }],
+      ["The same call continues", "<b>Now the history is available</b>, and she doesn't start over.", async () => {
+        const j = await channelSay("voice", "+1 (917) 555-0199", "So what's happening with my hotel dispute?");
+        note(`Answer used ${facts(j.trace?.memories_used?.length || 0)} from Maya's memory.`, "ok"); }],
+      ["Later she asks to change her phone number by voice", "<b>Refused on a voice-only check.</b> Changing contact details needs stronger verification. That's a classic fraud route.", async () => {
+        $("#feed").replaceChildren(); setPhone("call", "Call from her usual number");
+        await channelSay("voice", MAYA_PHONE, "Please update my phone number to 917 555 0199");
+        note("Contact-detail change refused: caller ID alone can be faked.", "bad"); }],
+    ]},
+  { group: "trust", title: "Information is always current", who: "Maya · dispute resolved in the cards system",
+    blurb: "When the source system changes, every channel's answer changes.",
+    right: "bank", waiting: "Each step shows what the bank's systems decide.",
+    kpis: [["0", "outdated answers after the update"], ["Every channel", "updated at once"], ["Source system", "always wins"]],
+    steps: [
+      ["Maya calls about her hotel dispute", "Memory says the dispute is open and under review.", async () => {
+        setPhone("call"); bankStart("");
+        await channelSay("voice", MAYA_PHONE, "What's the status of my hotel dispute?");
+        note("Dispute open, under review (from the cards system)."); }],
+      ["The cards system resolves the dispute", "<b>An update event replaces the old fact in memory</b>, so no channel keeps the old answer.", async () => {
+        await api("POST", "/sor/events", {system: "Cards", ref_id: "DSP-5521", status: "Resolved", detail: "credit of $412.80 issued"});
+        msg("system", "Meanwhile, the cards system marks the dispute resolved"); note("Old fact replaced: dispute resolved, $412.80 credited.", "ok"); }],
+      ["Next day, she emails", "<b>The email answer reflects the update</b>, not the old memory.", async () => {
+        $("#feed").replaceChildren(); setPhone("email");
+        await channelSay("email", MAYA_EMAIL, "Hi, any news on my hotel dispute?");
+        note("Email reply used the updated fact.", "ok"); }],
+    ]},
+  { group: "trust", title: "Keeps working during an outage", who: "Maya · the memory service goes down",
+    blurb: "Customers still get answers. Nothing is lost.",
+    right: "bank", waiting: "Each step shows what the bank's systems decide.",
+    kpis: [["0", "failed conversations"], ["0", "lost updates"], ["Automatic", "recovery and catch-up"]],
+    steps: [
+      ["The memory service goes down", "We simulate a full outage of the memory service.", async () => {
+        bankStart(""); setPhone("chat", "Bank app");
+        await api("POST", "/ops/faults", {memory_bank: "down"}); note("Memory service unavailable.", "bad"); msg("system", "Behind the scenes: memory service is down"); }],
+      ["Maya tells the chat about a trip", "<b>She still gets an answer.</b> The new fact is held safely until memory is back.", async () => {
+        const j = await channelSay("web_chat", MAYA_APP, "Please remember that I'm travelling to Porto on November 15, 2026");
+        note((j.trace?.writes || []).some(w => w.status === "queued") ? "New fact held in a queue, not lost." : "Answered from the live conversation and customer profile.", "warn"); }],
+      ["The memory service comes back", "<b>Held updates are delivered automatically.</b>", async () => {
+        await api("POST", "/ops/faults", {memory_bank: "ok"}); const r = await api("POST", "/ops/outbox/drain");
+        note(`Memory service back. ${r.delivered} held update(s) delivered.`, "ok"); msg("system", "Behind the scenes: memory service is back"); }],
+      ["Later she calls", "<b>The trip she mentioned during the outage is remembered.</b>", async () => {
+        $("#feed").replaceChildren(); setPhone("call");
+        const j = await channelSay("voice", MAYA_PHONE, "Do you have my Porto trip noted?");
+        note(`Answer used ${facts(j.trace?.memories_used?.length || 0)}, including the one saved during the outage.`, "ok"); }],
+    ]},
+];
+
+// ------------------------------------------------------------ player
+let group = "journeys", cur = null, step = 0, busy = false;
+function renderList() {
+  const list = $("#list"); list.replaceChildren(el("h3", {}, group === "journeys" ? "Client journeys" : "Trust & safety"));
+  STORIES.forEach((s, i) => { if (s.group !== group) return;
+    const b = el("button", {class: "story" + (i === cur ? " on" : "")}, el("b", {}, s.title), el("span", {}, s.blurb));
+    b.onclick = () => pick(i); list.append(b); });
+}
+function renderDots() {
+  const s = STORIES[cur]; $("#dots").replaceChildren(...s.steps.map((_, i) => el("i", {class: i < step ? "done" : i === step ? "now" : ""})));
+}
+function pick(i) {
+  if (busy) return;
+  cur = i; step = 0; const s = STORIES[i];
+  for (const k of Object.keys(S)) delete S[k];
+  $("#who").textContent = s.who; $("#title").textContent = s.title; $("#why").textContent = s.blurb;
+  $("#next").textContent = "Start"; $("#next").disabled = false; $("#err").hidden = true; $("#outcome").hidden = true;
+  $("#right-label").textContent = s.right === "specialist" ? "What the specialist sees" : "What the bank sees";
+  $("#feed").replaceChildren(el("div", {class: "empty"}, "Press Start to begin."));
+  setPhone(s.right === "specialist" ? "app" : "call");
+  if (s.right === "specialist") deskWaiting(s.waiting); else bankStart(s.waiting);
+  renderList(); renderDots();
+}
+async function next() {
+  if (busy || cur == null) return;
+  const s = STORIES[cur];
+  if (step >= s.steps.length) return pick(cur);
+  const [title, why, run] = s.steps[step];
+  busy = true; $("#next").disabled = true; $("#next").textContent = "Working…"; $("#err").hidden = true;
+  $("#title").textContent = title; $("#why").innerHTML = why;
+  try { await run(); step++; }
+  catch (e) { $("#err").textContent = "Something went wrong: " + e.message + ". Press Reset demo and try again."; $("#err").hidden = false; }
+  busy = false; renderDots();
+  const done = step >= s.steps.length;
+  $("#next").disabled = false; $("#next").textContent = done ? "Play again" : `Next step (${step + 1} of ${s.steps.length})`;
+  if (done) { $("#kpis").replaceChildren(...s.kpis.map(([b, t]) => el("div", {class: "kpi"}, el("b", {}, b), el("span", {}, t)))); $("#outcome").hidden = false; }
+}
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  if (busy) return;
+  group = b.dataset.group; document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
+  pick(STORIES.findIndex(s => s.group === group));
+});
+$("#next").onclick = next;
+$("#restart").onclick = () => cur != null && pick(cur);
+$("#reset").onclick = async () => {
+  if (busy) return; busy = true; const b = $("#reset"); b.textContent = "Resetting…"; b.disabled = true;
+  try { await api("POST", "/ops/demo/reset"); } catch (e) { $("#err").textContent = "Reset failed: " + e.message; $("#err").hidden = false; }
+  b.textContent = "Reset demo"; b.disabled = false; busy = false; pick(cur ?? 0);
+};
+document.addEventListener("keydown", e => {
+  if ((e.key === "ArrowRight" || e.key === " ") && !e.target.closest("input,textarea")) { e.preventDefault(); next(); }
+});
+api("GET", "/ops/status").then(s => {
+  const live = s.backend === "vertex"; const m = $("#mode");
+  m.textContent = live ? "Live AI · Gemini + Memory Bank" : "Rehearsal mode · stand-in AI"; m.classList.toggle("live", live);
+}).catch(() => { $("#mode").textContent = "Server not reachable"; });
+pick(0);
+</script>
+</body>
+</html>

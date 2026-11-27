@@ -53,9 +53,9 @@ async def _drainer():
 
 @contextlib.asynccontextmanager
 async def lifespan(_app):
-    g = gateway()
-    if not g.cfg.use_vertex:  # local backend starts empty; Vertex is seeded by scripts/ingest_profiles.py
-        await g.seed_all()
+    # Local backend starts empty. Live (vertex) with SEED_ON_START=1: wipe and re-seed every synthetic customer
+    # through this process, so the in-process lifecycle ledger knows each memory (supersede / expiry / erasure).
+    await _seed(gateway())
     task = asyncio.create_task(_drainer())
     yield
     task.cancel()
@@ -473,9 +473,33 @@ async def events(topic: str | None = None, n: int = 30):
 
 
 @app.get("/", include_in_schema=False)
+async def business_view():
+    """Business view: client journeys and trust stories, one step at a time, without technical detail."""
+    return FileResponse(Path(__file__).parent / "static" / "present.html")
+
+
+@app.get("/console", include_in_schema=False)
 async def demo_page():
-    """Scenario console: three channels, CRM desktop, and governance / ops inspectors."""
+    """Technical console: three channels, CRM desktop, and governance / ops inspectors."""
     return FileResponse(Path(__file__).parent / "static" / "demo.html")
+
+
+async def _seed(g: OmnichannelGateway) -> None:
+    if not g.cfg.use_vertex:
+        await g.seed_all()
+    elif os.environ.get("SEED_ON_START") == "1":
+        await g.reseed_vertex()
+
+
+@app.post("/ops/demo/reset")
+async def demo_reset():
+    """Fresh demo state: new gateway (identity links, ledger, servicing, sessions), clock reset, customers re-seeded."""
+    global _gateway
+    _gateway = None
+    clock.reset()
+    g = gateway()
+    await _seed(g)
+    return {"status": "reset", "backend": g.cfg.backend}
 
 
 @app.get("/healthz")
