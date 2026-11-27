@@ -1,0 +1,73 @@
+{
+  "system": "WorkforceManagement",
+  "note": "Skill-based queues for proficiency routing; availability is synthetic.",
+  "queues": [
+    {
+      "queue": "Card-Fees-Specialists",
+      "skills": [
+        "FEE_WAIVER",
+        "FEE_INQUIRY"
+      ],
+      "channels": [
+        "voice",
+        "live_chat"
+      ],
+      "agents_available": 3,
+      "avg_wait_s": 90,
+      "hours": "08:00-22:00 ET"
+    },
+    {
+      "queue": "Fraud-Disputes",
+      "skills": [
+        "UNRECOGNIZED_CHARGE",
+        "DISPUTE"
+      ],
+      "channels": [
+        "voice",
+        "live_chat"
+      ],
+      "agents_available": 2,
+      "avg_wait_s": 150,
+      "hours": "24x7"
+    },
+    {
+      "queue": "Card-Sales-Specialists",
+      "skills": [
+        "PRODUCT_INTEREST"
+      ],
+      "channels": [
+        "live_chat",
+        "voice"
+      ],
+      "agents_available": 4,
+      "avg_wait_s": 45,
+      "hours": "08:00-20:00 ET"
+    },
+    {
+      "queue": "Payments-Support",
+      "skills": [
+        "MAKE_PAYMENT"
+      ],
+      "channels": [
+        "voice",
+        "live_chat"
+      ],
+      "agents_available": 0,
+      "avg_wait_s": 0,
+      "hours": "08:00-20:00 ET"
+    },
+    {
+      "queue": "General-Servicing",
+      "skills": [
+        "*"
+      ],
+      "channels": [
+        "voice",
+        "live_chat"
+      ],
+      "agents_available": 6,
+      "avg_wait_s": 120,
+      "hours": "24x7"
+    }
+  ]
+}

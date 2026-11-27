@@ -26,17 +26,13 @@ STORY = json.loads((ROOT / "eval" / "storyline.json").read_text())
 
 async def _reset_memories(gw: OmnichannelGateway, customers: list[str]) -> None:
     """Start each run from source-system facts only, so runs are comparable."""
-    from cx_memory.local_memory import fact_entry
-    from cx_memory.profiles import load_profile, profile_facts
-
     if gw.cfg.use_vertex:
         from scripts.ingest_profiles import reset_customer
 
         for c in customers:
-            reset_customer(c)
+            reset_customer(gw, c)
     for c in customers:
-        await gw.memory_service.add_memory(app_name=gw.app_name, user_id=c,
-                                           memories=[fact_entry(f) for f in profile_facts(load_profile(c))])
+        await gw.seed_customer(c)
 
 
 async def run_once(gw: OmnichannelGateway, run_idx: int) -> dict:
@@ -56,8 +52,9 @@ async def run_once(gw: OmnichannelGateway, run_idx: int) -> dict:
             sessions[step["id"]] = replies[0].session_id
         latency = time.perf_counter() - t0
         for r in replies:
-            first = (await gw.session_service.get_session(app_name=gw.app_name, user_id=r.customer_id,
-                                                          session_id=r.session_id)).state.get("first_name")
+            from cx_memory.profiles import load_profile
+
+            first = load_profile(r.customer_id)["first_name"] if r.customer_id else None
             rd = {**r.__dict__, "first_name": first}
             sc = score_step(step, rd)
             rows.append({"run": run_idx, "step": step["id"], "channel": r.channel, "latency_s": round(latency, 2),

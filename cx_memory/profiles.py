@@ -33,6 +33,7 @@ def load_profile(customer_id: str) -> dict:
         "first_name": crm["first_name"],
         "last_name": crm["last_name"],
         "segment": crm["segment"],
+        "household_id": crm.get("household_id"),
         "customer_since": crm["since"],
         "accounts": by_cid(src["core_banking"]["accounts"]),
         "cards": by_cid(src["cards"]["cards"]),
@@ -40,6 +41,59 @@ def load_profile(customer_id: str) -> dict:
         "preferences": prefs[0] if prefs else {},
         "sources": SOURCE_SYSTEMS,
     }
+
+
+def apply_sor_update(ref_id: str, status: str, detail: str | None = None) -> str | None:
+    """Apply a system-of-record status change (dispute or servicing case) to the cached SOR data.
+
+    Returns the owning customer_id, or None if the reference is unknown. Stands in for the SOR itself;
+    in production the gateway reads the SOR live and only the event reaches the memory layer.
+    """
+    src = _load()
+    for card in src["cards"]["cards"]:
+        d = card.get("open_dispute")
+        if d and d["id"] == ref_id:
+            d["status"] = status
+            if detail:
+                d["resolution"] = detail
+            return card["customer_id"]
+    for case in src["servicing"]["cases"]:
+        if case["case_id"] == ref_id:
+            case["status"] = status
+            if detail:
+                case["detail"] = detail
+            return case["customer_id"]
+    return None
+
+
+def owner_of_ref(ref_id: str) -> str | None:
+    src = _load()
+    for card in src["cards"]["cards"]:
+        if (card.get("open_dispute") or {}).get("id") == ref_id:
+            return card["customer_id"]
+    for case in src["servicing"]["cases"]:
+        if case["case_id"] == ref_id:
+            return case["customer_id"]
+    return None
+
+
+def seed_facts(p: dict) -> list[tuple[str, str]]:
+    """(fact, topic) pairs for Memory Bank. The CRM name line is left out on purpose: names and
+    identifiers come from the live profile, so the memory store holds as little PII as possible."""
+    out = []
+    for f in profile_facts(p):
+        if "[source: CRM]" in f:
+            continue
+        if "[source: CoreBanking]" in f or ("[source: Cards]" in f and "dispute" not in f):
+            topic = "product_holdings"
+        elif "dispute" in f or "[source: Servicing]" in f:
+            topic = "open_service_issues"
+        elif "Hard of hearing" in f or "contact window" in f:
+            topic = "contact_and_accessibility_needs"
+        else:
+            topic = "user_preferences"
+        out.append((f, topic))
+    return out
 
 
 def all_customer_ids() -> list[str]:
@@ -62,7 +116,8 @@ def profile_facts(p: dict) -> list[str]:
         facts.append(line + ". [source: Cards]")
         if d := c.get("open_dispute"):
             facts.append(
-                f"Open card dispute {d['id']} for ${d['amount_usd']:.2f} at {d['merchant']}, opened {d['opened']}, status {d['status']}. [source: Cards]"
+                f"Open card dispute {d['id']} for ${d['amount_usd']:.2f} at {d['merchant']}, opened {d['opened']}, status {d['status']}"
+            + (f" ({d['resolution']})" if d.get("resolution") else "") + ". [source: Cards]"
             )
     for k in p["cases"]:
         facts.append(f"Servicing case {k['case_id']} ({k['topic']}) is {k['status']}: {k['detail']}. [source: Servicing]")

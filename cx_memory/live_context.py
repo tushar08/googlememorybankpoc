@@ -32,6 +32,14 @@ class LiveContextStore:
         async with self._lock:
             self._turns[customer_id].append(Turn(channel, customer_text, agent_text, time.time()))
 
+    async def note(self, customer_id: str, channel: str, text: str) -> None:
+        """System note (e.g. 'caller verified from a new number', 'dispute resolved in SOR')."""
+        await self.append(customer_id, channel, "", f"[system] {text}")
+
+    def view(self, customer_id: str) -> list[dict]:
+        return [{"channel": t.channel, "customer": t.customer_text, "agent": t.agent_text[:200],
+                 "age_s": int(time.time() - t.ts)} for t in self._turns.get(customer_id, [])]
+
     def render(self, customer_id: str) -> str:
         turns = list(self._turns.get(customer_id, []))
         if not turns:
@@ -39,7 +47,10 @@ class LiveContextStore:
         lines = []
         for t in turns:
             age = int(time.time() - t.ts)
-            lines.append(f"- [{t.channel}, {age}s ago] customer: {t.customer_text!r} | agent: {t.agent_text[:160]!r}")
+            if t.customer_text:
+                lines.append(f"- [{t.channel}, {age}s ago] customer: {t.customer_text!r} | agent: {t.agent_text[:160]!r}")
+            else:
+                lines.append(f"- [{t.channel}, {age}s ago] {t.agent_text[:200]}")
         return "\n".join(lines)
 
     def channels_seen(self, customer_id: str) -> set[str]:

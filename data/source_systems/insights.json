@@ -1,0 +1,45 @@
+{
+  "system": "RecommendationEngine",
+  "note": "Stub of the recommendation engine: predictive servicing intents and personalization (next-best) actions.",
+  "insights": [
+    {
+      "customer_id": "CUST-1001",
+      "predicted_intent": "MAKE_PAYMENT",
+      "confidence": 0.87,
+      "reason": "credit card payment due in 2 days",
+      "model": "servicing-intent-v3"
+    },
+    {
+      "customer_id": "CUST-1004",
+      "predicted_intent": "FEE_WAIVER",
+      "confidence": 0.81,
+      "reason": "monthly service fee charged on 2026-11-01 after balance dipped below minimum",
+      "model": "servicing-intent-v3"
+    },
+    {
+      "customer_id": "CUST-1002",
+      "predicted_intent": null,
+      "confidence": 0.0,
+      "reason": "no prediction above threshold",
+      "model": "servicing-intent-v3"
+    }
+  ],
+  "next_best_actions": [
+    {
+      "customer_id": "CUST-1004",
+      "offer_id": "OFR-TRAVEL-01",
+      "offer": "Premium Travel Rewards Card",
+      "eligibility": "pre-qualified",
+      "channel": "specialist",
+      "queue": "Card-Sales-Specialists"
+    },
+    {
+      "customer_id": "CUST-1001",
+      "offer_id": "OFR-AUTOPAY-01",
+      "offer": "Set up AutoPay for the Premier Travel Card",
+      "eligibility": "eligible",
+      "channel": "digital",
+      "queue": null
+    }
+  ]
+}

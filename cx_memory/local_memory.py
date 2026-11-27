@@ -1,13 +1,16 @@
 """Offline stand-in for Agent Platform Memory Bank (used by tests and BACKEND=local).
 
-Implements the same ADK BaseMemoryService surface the agents use:
-search_memory, add_memory, add_events_to_memory, add_session_to_memory.
+Implements the ADK BaseMemoryService surface: search_memory, add_memory, add_events_to_memory,
+add_session_to_memory, delete_memory (+ purge for erasure).
 Retrieval is simple keyword overlap; Memory Bank does semantic similarity search.
+Consolidation, supersession and TTL live in the GovernedMemoryService in front of this class,
+so they behave the same on both backends.
 """
 from __future__ import annotations
 
 import re
 import time
+import uuid
 from collections import defaultdict
 from typing import Mapping, Sequence
 
@@ -34,14 +37,12 @@ class LocalMemoryService(BaseMemoryService):
     async def add_memory(self, *, app_name: str, user_id: str, memories: Sequence[MemoryEntry],
                          custom_metadata: Mapping[str, object] | None = None) -> None:
         bucket = self._store[(app_name, user_id)]
+        meta = dict(custom_metadata or {})
         for m in memories:
-            text = _text(m)
-            # naive "consolidation": replace an existing memory with the same topic tag
-            topic = (custom_metadata or {}).get("topic") if custom_metadata else None
-            if topic:
-                bucket[:] = [e for e in bucket if (e.custom_metadata or {}).get("topic") != topic or _text(e) == text]
-            if all(_text(e) != text for e in bucket):
-                bucket.append(m.model_copy(update={"custom_metadata": {**(m.custom_metadata or {}), **(dict(custom_metadata) if custom_metadata else {})}}))
+            mid = meta.get("memory_id") or m.id or "m-" + uuid.uuid4().hex[:20]
+            if any(e.id == mid for e in bucket):
+                continue  # idempotent replay from the outbox
+            bucket.append(m.model_copy(update={"id": mid, "custom_metadata": {**(m.custom_metadata or {}), **meta}}))
 
     async def add_events_to_memory(self, *, app_name: str, user_id: str, events, session_id=None,
                                    custom_metadata=None) -> None:
@@ -58,6 +59,13 @@ class LocalMemoryService(BaseMemoryService):
 
     async def add_session_to_memory(self, session) -> None:
         await self.add_events_to_memory(app_name=session.app_name, user_id=session.user_id, events=session.events)
+
+    async def delete_memory(self, *, app_name: str, user_id: str, memory_id: str | None = None) -> None:
+        bucket = self._store.get((app_name, user_id), [])
+        bucket[:] = [e for e in bucket if e.id != memory_id]
+
+    def purge(self, app_name: str, user_id: str) -> None:
+        self._store.pop((app_name, user_id), None)
 
     # ---- read ---------------------------------------------------------------
     async def search_memory(self, *, app_name: str, user_id: str, query: str) -> SearchMemoryResponse:

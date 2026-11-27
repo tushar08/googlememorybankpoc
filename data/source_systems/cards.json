@@ -27,6 +27,12 @@
       "card_last4": "2210",
       "product": "Business Card (synthetic)",
       "status": "Active"
+    },
+    {
+      "customer_id": "CUST-1004",
+      "card_last4": "5530",
+      "product": "Everyday Debit Card (synthetic)",
+      "status": "Active"
     }
   ]
 }

@@ -1,0 +1,41 @@
+{
+  "system": "KnowledgeBase",
+  "articles": [
+    {
+      "kb_id": "KB-1041",
+      "reason_code": "FEE_WAIVER",
+      "title": "Late fee courtesy waiver policy",
+      "summary": "One courtesy late-fee waiver per 12 months when the account is current; specialist approval required for card fees; log disposition FEE_WAIVED."
+    },
+    {
+      "kb_id": "KB-1042",
+      "reason_code": "FEE_WAIVER",
+      "title": "Foreign transaction fees",
+      "summary": "FX fees are disclosed and not normally waived; offer the no-FX-fee card if the customer travels often."
+    },
+    {
+      "kb_id": "KB-2210",
+      "reason_code": "UNRECOGNIZED_CHARGE",
+      "title": "Unrecognized charge triage",
+      "summary": "Check merchant descriptor lookup first (many 'unknown' charges are subscriptions); if still unrecognized, lock card, open dispute, issue replacement."
+    },
+    {
+      "kb_id": "KB-2211",
+      "reason_code": "UNRECOGNIZED_CHARGE",
+      "title": "Merchant descriptor QXT*",
+      "summary": "QXT* descriptors belong to a digital-services billing aggregator; ask about streaming or app subscriptions."
+    },
+    {
+      "kb_id": "KB-3105",
+      "reason_code": "PRODUCT_INTEREST",
+      "title": "Premium Travel Rewards Card: pre-qualified offer script",
+      "summary": "Confirm pre-qualification, explain annual fee and travel credits, soft-pull disclosure."
+    },
+    {
+      "kb_id": "KB-4001",
+      "reason_code": "MAKE_PAYMENT",
+      "title": "Card payments and AutoPay",
+      "summary": "Payments before 8pm ET post same day; offer AutoPay for the minimum or full balance."
+    }
+  ]
+}

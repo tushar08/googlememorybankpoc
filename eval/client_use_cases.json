@@ -1,0 +1,91 @@
+{
+  "name": "client_servicing_journeys",
+  "description": "Client-expected servicing journeys: predictive intent, digital fulfilment, context passing from the in-app assistant to live chat and voice, proficiency routing, no repeat authentication, and fulfilment status shown back in the app. Synthetic data only.",
+  "use_cases": [
+    {
+      "id": "UC-D1",
+      "title": "Predicted intent (fee waiver) fulfilled digitally, then next-best offer to a specialist in live chat",
+      "customer": "CUST-1004", "account_id": "ACC-77310077",
+      "test_data": "Savings ACC-77310077 with a $5.00 monthly service fee (TXN-84001); recommendation engine predicts FEE_WAIVER (0.81) and a pre-qualified Premium Travel Rewards Card offer",
+      "steps": [
+        {"do": "digital_start", "expect": {"text_contains": ["fee waiver"], "insight.predicted_intent": "FEE_WAIVER"}},
+        {"do": "say", "text": "Yes", "expect": {"text_contains": ["Which account"]}},
+        {"do": "say", "text": "Savings account", "expect": {"text_contains": ["one-time courtesy", "$5.00"], "waiver.status": "waived"}},
+        {"do": "say", "text": "No", "expect": {"text_contains": ["Premium Travel Rewards Card", "specialist"]}},
+        {"do": "say", "text": "Yes", "expect": {"intent": "ESCALATION", "handoff.routing.queue": "Card-Sales-Specialists"}},
+        {"do": "say", "text": "Chat here please", "expect": {"chat_transfer.queue": "Card-Sales-Specialists"}},
+        {"do": "agent_pickup", "channel": "CHAT", "expect": {"contact_attributes.auth": "carried_over",
+          "contact_attributes.route_queue": "Card-Sales-Specialists", "screen_pop.agent_greeting_contains": ["Premium Travel Rewards Card"],
+          "screen_pop.suggested_actions_contains": ["Already done in the app"]}}
+      ]
+    },
+    {
+      "id": "UC-D2",
+      "title": "No prediction; unrecognized charge on the July statement; customer opts out to a live chat agent with context",
+      "customer": "CUST-1002", "account_id": "ACC-55102988",
+      "test_data": "Card ending 9032, July statement with QXT*DIGITAL SVCS $89.99 (TXN-82001), City Transit, Corner Pharmacy; no predicted intent",
+      "steps": [
+        {"do": "digital_start", "expect": {"text_contains": ["How can I help"], "insight": null}},
+        {"do": "say", "text": "I am contacting about a charge that I don't recognize on my July statement",
+         "expect": {"text_contains": ["I can help you with the unrecognized charges", "QXT*DIGITAL SVCS"]}},
+        {"do": "say", "text": "I'd like to talk to an agent", "expect": {"chat_transfer.queue": "Fraud-Disputes"}},
+        {"do": "agent_pickup", "channel": "CHAT", "expect": {"contact_attributes.auth": "carried_over",
+          "screen_pop.agent_greeting_contains": ["I can look at the unrecognized charges for you"],
+          "screen_pop.why_calling.reason_code": "UNRECOGNIZED_CHARGE", "screen_pop.suggested_actions_contains": ["KB-2211"]}}
+      ]
+    },
+    {
+      "id": "UC-O1",
+      "title": "Omnichannel: same unrecognized charge, customer chooses click-to-dial; IVR fetches context and routes; no re-authentication",
+      "customer": "CUST-1002", "account_id": "ACC-55102988", "phone": "+1 (646) 555-0177",
+      "test_data": "As UC-D2; the call comes from the phone on file",
+      "steps": [
+        {"do": "digital_start", "expect": {"text_contains": ["How can I help"]}},
+        {"do": "say", "text": "I am contacting about a charge that I don't recognize on my July statement",
+         "expect": {"text_contains": ["unrecognized charges"]}},
+        {"do": "say", "text": "Can I call someone about this?", "expect": {"click_to_dial.contact_attributes.handoff_token_contains": ["hct_"]}},
+        {"do": "agent_pickup", "channel": "VOICE", "expect": {"risk.decision": "auto_authenticated",
+          "contact_attributes.route_queue": "Fraud-Disputes", "screen_pop.agent_greeting_contains": ["unrecognized charges"]}}
+      ]
+    },
+    {
+      "id": "UC-N",
+      "title": "Known intent fulfilment: predicted payment, fee inquiry, fee waiver escalated to a voice specialist, outcome shown back in the app",
+      "customer": "CUST-1001", "account_id": "ACC-77310042", "phone": "+1 (212) 555-0142",
+      "test_data": "Card ending 4417: minimum $40.00 due in 2 days, pay from checking ACC-77310042; late payment fee $40.00 on 2026-10-15 (TXN-81001), FX fee $6.15 (TXN-81002); Card-Fees-Specialists has 3 agents available",
+      "steps": [
+        {"do": "digital_start", "expect": {"text_contains": ["due in 2 days", "take care of it now"], "insight.predicted_intent": "MAKE_PAYMENT"}},
+        {"do": "say", "text": "Yes", "expect": {"text_contains": ["Pay $40.00 from checking ending 0042"]}},
+        {"do": "say", "text": "Yes", "expect": {"text_contains": ["confirmation PAY-"], "payment.amount_usd": 40.0}},
+        {"do": "say", "text": "What fees were charged on my card?", "expect": {"text_contains": ["Late payment fee $40.00", "Foreign transaction fee"]}},
+        {"do": "say", "text": "Can you help to waive off the fee charged on October 15?",
+         "expect": {"text_contains": ["not able to waive", "specialist"], "handoff.routing.queue": "Card-Fees-Specialists", "handoff.routing.available": true}},
+        {"do": "say", "text": "Call now", "expect": {"click_to_dial.contact_attributes.handoff_token_contains": ["hct_"]}},
+        {"do": "agent_pickup", "channel": "VOICE", "expect": {"risk.decision": "auto_authenticated", "contact_attributes.skill": "FEE_WAIVER",
+          "contact_attributes.route_queue": "Card-Fees-Specialists", "screen_pop.why_calling.reason_code": "FEE_WAIVER",
+          "screen_pop.suggested_actions_contains": ["one-time courtesy waiver of the $40.00 late payment fee", "Already done in the app"],
+          "screen_pop.agent_greeting_contains": ["$40.00 late payment fee"]}},
+        {"do": "wrap_up", "fulfilment": {"action": "FEE_WAIVER"}, "expect": {"crm_activity.fulfilment.status": "completed"}},
+        {"do": "digital_start", "expect": {"text_contains": ["was waived by a specialist"], "updates.0.status": "completed"}}
+      ]
+    },
+    {
+      "id": "UC-NEG",
+      "title": "Negative paths: FX fee not waivable, token replay refused, unknown phone needs step-up, expired token",
+      "customer": "CUST-1001", "account_id": "ACC-77310042", "phone": "+1 (212) 555-0142",
+      "test_data": "As UC-N",
+      "steps": [
+        {"do": "digital_start", "expect": {}},
+        {"do": "say", "text": "No", "expect": {}},
+        {"do": "say", "text": "Please waive the foreign transaction fee from October 22", "expect": {"text_contains": ["can't waive", "not waivable"]}},
+        {"do": "say", "text": "Can you waive the late fee?", "expect": {"handoff.reason_code": "FEE_WAIVER"}},
+        {"do": "say", "text": "Call now", "expect": {}},
+        {"do": "agent_pickup", "channel": "VOICE", "from": "+1 (917) 555-0199", "expect": {"contact_attributes.verified": "false", "risk.decision": "step_up_required"}},
+        {"do": "agent_pickup", "channel": "VOICE", "expect": {"contact_attributes.reason": "token_already_used"}},
+        {"do": "say", "text": "Can you waive the late fee?", "expect": {"handoff.reason_code": "FEE_WAIVER"}},
+        {"do": "advance_clock", "minutes": 16},
+        {"do": "agent_pickup", "channel": "VOICE", "expect": {"contact_attributes.reason": "token_expired"}}
+      ]
+    }
+  ]
+}

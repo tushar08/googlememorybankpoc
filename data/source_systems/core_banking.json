@@ -24,6 +24,12 @@
       "account_id": "ACC-90014534",
       "type": "Business Savings",
       "status": "Active"
+    },
+    {
+      "customer_id": "CUST-1004",
+      "account_id": "ACC-77310077",
+      "type": "Savings",
+      "status": "Active"
     }
   ]
 }

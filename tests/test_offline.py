@@ -1,4 +1,5 @@
-"""21 offline tests (no GCP): 7 per channel area + shared plumbing.
+"""Core offline tests (no GCP): identity, profiles, channel style, routing, memory write path.
+Scenario tests (step-up, CRM, lifecycle, governance, resilience, cost) live in test_scenarios.py.
 
     pytest -q
 """
@@ -89,9 +90,12 @@ async def test_12_unknown_channel_rejected(gw):
         await gw.handle("sms", "2125550142", "hello")
 
 
-async def test_13_three_agents_share_one_memory_scope(gw):
+async def test_13_three_agents_share_one_memory_scope_per_partition(gw):
     apps = {r.app_name for r in gw.runners.values()}
-    assert apps == {"cx_unified"} and len(gw.agents) == 3
+    assert apps == {"cx_unified_consumer", "cx_unified_business"} and len(gw.agents) == 3
+    scopes = {(await gw.handle(ch, i, "hello")).trace["customer_token"] for ch, i in
+              [("web_chat", "ACC-77310042"), ("voice", "2125550142"), ("email", "maya.patel@example.com")]}
+    assert len(scopes) == 1
 
 
 async def test_14_preload_memory_injects_bank_facts_before_model_call(gw):
@@ -102,7 +106,8 @@ async def test_14_preload_memory_injects_bank_facts_before_model_call(gw):
 
 async def test_15_session_state_tier_seeded_with_profile(gw):
     r = await gw.handle("email", "maya.patel@example.com", "hello")
-    s = await gw.session_service.get_session(app_name=gw.app_name, user_id=r.customer_id, session_id=r.session_id)
+    part, token = gw.scope(r.customer_id)
+    s = await gw.session_service.get_session(app_name=part.app_name, user_id=token, session_id=r.session_id)
     assert s.state["first_name"] == "Maya" and "Skyline Hotels" in s.state["customer_profile"]
 
 
@@ -111,14 +116,16 @@ async def test_15_session_state_tier_seeded_with_profile(gw):
 async def test_16_save_customer_fact_writes_to_memory_bank(gw):
     r = await gw.handle("web_chat", "ACC-77310042", "Please remember that I fly to Lisbon on the 10th")
     assert "save_customer_fact" in r.tool_calls
-    assert any("Lisbon" in f and "[channel: web_chat]" in f for f in gw.memory_service.all_facts(gw.app_name, "CUST-1001"))
+    recs = gw.memory_service.ledger.active(gw.scope("CUST-1001")[1])
+    assert any("Lisbon" in r.text and r.source_channel == "web_chat" and r.source_kind == "agent_tool" for r in recs)
 
 
 async def test_17_after_agent_callback_syncs_turn(gw):
     r = await gw.handle("voice", "2125550142", "my card was declined in a shop")
-    s = await gw.session_service.get_session(app_name=gw.app_name, user_id=r.customer_id, session_id=r.session_id)
+    part, token = gw.scope(r.customer_id)
+    s = await gw.session_service.get_session(app_name=part.app_name, user_id=token, session_id=r.session_id)
     assert s.state["turns_synced"] == 1
-    assert any("declined" in f for f in gw.memory_service.all_facts(gw.app_name, "CUST-1001"))
+    assert any("declined" in f for f in gw.memory_service.inner.all_facts(part.app_name, token))
 
 
 async def test_18_full_card_numbers_redacted_on_save(gw):
@@ -150,4 +157,4 @@ async def test_21_three_channels_served_concurrently(gw):
     )
     assert {r.channel for r in rs} == {"web_chat", "voice", "email"}
     assert all(not r.style_violations for r in rs)
-    assert gw.live.channels_seen("CUST-1001") == {"web_chat", "voice", "email"}
+    assert gw.live.channels_seen(gw.scope("CUST-1001")[1]) == {"web_chat", "voice", "email"}
